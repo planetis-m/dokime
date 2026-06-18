@@ -1,6 +1,6 @@
 ## Phase 5: Integration test with parameterized query.
 ##
-## This test verifies the full library: import nsql/nsql, use the query
+## This test verifies the full library: import nsql, use the query
 ## template with bind parameters, and get back a typed result.
 ##
 ## Run:
@@ -11,7 +11,7 @@
 
 import std/syncio
 import std/assertions
-import nsql/nsql
+import nsql
 
 # Set up test database with seed data
 block setup:

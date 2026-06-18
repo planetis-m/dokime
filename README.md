@@ -8,7 +8,7 @@ Every SQL string passed to `query()` is validated against your database during c
 If the SQL is invalid, the binary is not produced.
 
 ```nim
-import nsql/nsql
+import nsql
 
 let db = openDatabase("myapp.db")
 
@@ -50,10 +50,10 @@ echo row.name  # string — type inferred from schema
 
 | File | Lines | Purpose |
 |---|---|---|
-| `src/nsql/nsql.nim` | 132 | Public API, runtime helpers, and `query` template |
-| `src/nsql/sqlite3.nim` | 136 | SQLite3 FFI bindings via dynlib |
-| `src/nsql/nsqlplug.nim` | 221 | Compile-time plugin (validates SQL, generates NIF code) |
-| **Total** | **489** | |
+| `src/nsql.nim` | 138 | Public API, runtime helpers, and `query` template |
+| `src/nsql/sqlite3.nim` | 139 | SQLite3 FFI bindings via dynlib |
+| `src/nsqlplug.nim` | 200 | Compile-time plugin (validates SQL, generates NIF code) |
+| **Total** | **477** | |
 
 ## Compile-Time Guarantees
 
