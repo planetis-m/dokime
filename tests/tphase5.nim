@@ -11,7 +11,7 @@
 
 import std/syncio
 import std/assertions
-import ".." / "src" / [dokime]
+import ".." / "src" / dokime
 
 proc main() {.raises.} =
   # Set up test database with seed data

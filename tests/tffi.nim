@@ -8,7 +8,7 @@
 {.feature: "lenientnils".}
 
 import std/syncio
-import ".." / "src" / "dokime" / [sqlite3]
+import ".." / "src" / "dokime" / sqlite3
 
 proc check(db: DbConn, code: cint, msg: string) =
   if code != SQLITE_OK:
