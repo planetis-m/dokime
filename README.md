@@ -50,11 +50,10 @@ echo row.name  # string — type inferred from schema
 
 | File | Lines | Purpose |
 |---|---|---|
-| `src/nsql/nsql.nim` | 33 | Public API — exports types, helpers, and `query` template |
+| `src/nsql/nsql.nim` | 132 | Public API, runtime helpers, and `query` template |
 | `src/nsql/sqlite3.nim` | 136 | SQLite3 FFI bindings via dynlib |
-| `src/nsql/runtime.nim` | 97 | Runtime execution helpers (prepare, bind, step, decode) |
 | `src/nsql/nsqlplug.nim` | 221 | Compile-time plugin (validates SQL, generates NIF code) |
-| **Total** | **487** | |
+| **Total** | **489** | |
 
 ## Compile-Time Guarantees
 

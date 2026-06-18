@@ -8,6 +8,7 @@
 
 import plugins
 import std / [envvars, syncio]
+import nsql
 import sqlite3
 
 # ---- Column metadata ----
@@ -29,25 +30,25 @@ proc toColumnKind(typeName: string): ColumnKind =
   else: ckNull
 
 proc addPrepareStmtSql(t: var NifBuilder) =
-  t.addIdent("prepareStmtSql")
+  t.bindSym("prepareStmtSql")
 
 proc addBindParam(t: var NifBuilder) =
-  t.addIdent("bindParam")
+  t.bindSym("bindParam")
 
 proc addStepStmt(t: var NifBuilder) =
-  t.addIdent("stepStmt")
+  t.bindSym("stepStmt")
 
 proc addColumnExtractor(t: var NifBuilder; k: ColumnKind) =
   ## Emits the runtime helper symbol for extracting a column of this kind.
   case k
   of ckInteger:
-    t.addIdent("columnInt64")
+    t.bindSym("columnInt64")
   of ckText, ckNull:
-    t.addIdent("columnString")
+    t.bindSym("columnString")
   of ckReal:
-    t.addIdent("columnFloat64")
+    t.bindSym("columnFloat64")
   of ckBlob:
-    t.addIdent("columnString")
+    t.bindSym("columnString")
 
 # ---- SQL validation ----
 
