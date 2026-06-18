@@ -5,13 +5,13 @@
 ##
 ## Run:
 ##   NSQL_DATABASE_PATH=tests/test_validate.db \
-##   nimony c -r --path:src -o:tests/test_phase5 tests/test_phase5.nim
+##   nimony c -r -o:tests/test_phase5 tests/test_phase5.nim
 
 {.feature: "lenientnils".}
 
 import std/syncio
 import std/assertions
-import nsql
+import ".." / "src" / [nsql]
 
 # Set up test database with seed data
 block setup:

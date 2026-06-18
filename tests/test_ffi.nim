@@ -3,12 +3,12 @@
 ## Verifies: open → create STRICT table → insert (bound params) →
 ## query → read columns → close.
 ##
-## Compile: nimony c -r --path:src tests/test_ffi.nim
+## Compile: nimony c -r tests/test_ffi.nim
 
 {.feature: "lenientnils".}
 
 import std/syncio
-import nsql/sqlite3
+import ".." / "src" / "nsql" / [sqlite3]
 
 proc check(db: DbConn, code: cint, msg: string) =
   if code != SQLITE_OK:

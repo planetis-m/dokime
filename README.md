@@ -37,8 +37,13 @@ echo row.name  # string — type inferred from schema
 2. Set `NSQL_DATABASE_PATH` during compilation:
    ```bash
    export NSQL_DATABASE_PATH=dev.db
-   nimony c -r --path:src myapp.nim
+   nimony c -r myapp.nim
    ```
+
+   When running directly from this source checkout, import the library with a
+   source-relative import (the tests do this) and avoid `--path:src`, because
+   Nimony currently gives plugin-bound symbols a different module suffix when
+   the app and the plugin resolve `src/nsql.nim` through different path rules.
 
 ## Requirements
 
@@ -52,8 +57,8 @@ echo row.name  # string — type inferred from schema
 |---|---|---|
 | `src/nsql.nim` | 138 | Public API, runtime helpers, and `query` template |
 | `src/nsql/sqlite3.nim` | 139 | SQLite3 FFI bindings via dynlib |
-| `src/nsqlplug.nim` | 200 | Compile-time plugin (validates SQL, generates NIF code) |
-| **Total** | **477** | |
+| `src/nsqlplug.nim` | 192 | Compile-time plugin (validates SQL, generates NIF code) |
+| **Total** | **469** | |
 
 ## Compile-Time Guarantees
 
