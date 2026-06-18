@@ -26,10 +26,35 @@ type
 # ---- Result codes ----
 
 const
-  SQLITE_OK*: cint    = 0
-  SQLITE_ROW*: cint   = 100
-  SQLITE_DONE*: cint  = 101
-  SQLITE_ERROR*: cint = 1
+  SQLITE_OK*: cint         = 0
+  SQLITE_ERROR*: cint      = 1
+  SQLITE_INTERNAL*: cint   = 2
+  SQLITE_PERM*: cint       = 3
+  SQLITE_ABORT*: cint      = 4
+  SQLITE_BUSY*: cint       = 5
+  SQLITE_LOCKED*: cint     = 6
+  SQLITE_NOMEM*: cint      = 7
+  SQLITE_READONLY*: cint   = 8
+  SQLITE_INTERRUPT*: cint  = 9
+  SQLITE_IOERR*: cint      = 10
+  SQLITE_CORRUPT*: cint    = 11
+  SQLITE_NOTFOUND*: cint   = 12
+  SQLITE_FULL*: cint       = 13
+  SQLITE_CANTOPEN*: cint   = 14
+  SQLITE_PROTOCOL*: cint   = 15
+  SQLITE_EMPTY*: cint      = 16
+  SQLITE_SCHEMA*: cint     = 17
+  SQLITE_TOOBIG*: cint     = 18
+  SQLITE_CONSTRAINT*: cint = 19
+  SQLITE_MISMATCH*: cint   = 20
+  SQLITE_MISUSE*: cint     = 21
+  SQLITE_NOLFS*: cint      = 22
+  SQLITE_AUTH*: cint       = 23
+  SQLITE_FORMAT*: cint     = 24
+  SQLITE_RANGE*: cint      = 25
+  SQLITE_NOTADB*: cint     = 26
+  SQLITE_ROW*: cint        = 100
+  SQLITE_DONE*: cint       = 101
 
 # --- Fundamental datatypes (sqlite3_column_type) ---
 
