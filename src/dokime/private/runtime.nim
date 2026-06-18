@@ -58,21 +58,15 @@ proc prepareStmtBytes(
   checkSqlite(rc)
   result = stmt
 
-template dokimePrepareStmt*(db: sqlite3.DbConn; sql: typed; sqlLen: int): sqlite3.Stmt =
+template prepareStmt*(db: sqlite3.DbConn; sql: typed; sqlLen: int): sqlite3.Stmt =
   prepareStmtBytes(db, cstring(sql), sqlLen)
 
-proc finalizeStmt(stmt: sqlite3.Stmt) {.raises.} =
+proc finalizeStmt*(stmt: sqlite3.Stmt) {.raises.} =
   checkSqlite(sqlite3_finalize(stmt))
 
-proc stepStmt(stmt: sqlite3.Stmt): cint {.raises.} =
+proc stepStmt*(stmt: sqlite3.Stmt): cint {.raises.} =
   result = sqlite3_step(stmt)
   checkSqlite(result)
-
-proc dokimeStepPrepared*(stmt: sqlite3.Stmt): cint {.raises.} =
-  result = stepStmt(stmt)
-
-proc dokimeFinalizePrepared*(stmt: sqlite3.Stmt) {.raises.} =
-  finalizeStmt(stmt)
 
 proc stmtReadOnly(stmt: sqlite3.Stmt): bool =
   result = sqlite3_stmt_readonly(stmt) != 0
@@ -93,26 +87,26 @@ proc bindText(stmt: sqlite3.Stmt; idx: int; value: string) {.raises.} =
 proc bindFloat64(stmt: sqlite3.Stmt; idx: int; value: float64) {.raises.} =
   checkSqlite(sqlite3_bind_double(stmt, idx.cint, value))
 
-proc dokimeBindParam*(stmt: sqlite3.Stmt; idx: int; value: int64) {.raises.} =
+proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: int64) {.raises.} =
   bindInt64(stmt, idx, value)
 
-proc dokimeBindParam*(stmt: sqlite3.Stmt; idx: int; value: string) {.raises.} =
+proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: string) {.raises.} =
   bindText(stmt, idx, value)
 
-proc dokimeBindParam*(stmt: sqlite3.Stmt; idx: int; value: float64) {.raises.} =
+proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: float64) {.raises.} =
   bindFloat64(stmt, idx, value)
 
-proc dokimeColumnInt64*(stmt: sqlite3.Stmt; col: int): int64 =
+proc columnInt64*(stmt: sqlite3.Stmt; col: int): int64 =
   result = sqlite3_column_int64(stmt, col.cint)
 
-proc dokimeColumnString*(stmt: sqlite3.Stmt; col: int): string =
+proc columnString*(stmt: sqlite3.Stmt; col: int): string =
   let cstr = sqlite3_column_text(stmt, col.cint)
   if cstr != nil:
     result = fromCString(cstr)
   else:
     result = ""
 
-proc dokimeColumnFloat64*(stmt: sqlite3.Stmt; col: int): float64 =
+proc columnFloat64*(stmt: sqlite3.Stmt; col: int): float64 =
   result = sqlite3_column_double(stmt, col.cint)
 
 proc lastInsertRowid(db: sqlite3.DbConn): int64 =
@@ -121,7 +115,7 @@ proc lastInsertRowid(db: sqlite3.DbConn): int64 =
 proc changes(db: sqlite3.DbConn): int64 =
   result = sqlite3_changes(db).int64
 
-proc dokimeExecPrepared*(db: sqlite3.DbConn; stmt: sqlite3.Stmt): SqlExecResult {.raises.} =
+proc execStmt*(db: sqlite3.DbConn; stmt: sqlite3.Stmt): SqlExecResult {.raises.} =
   result = SqlExecResult(changes: 0, lastInsertRowid: 0)
   let readOnly = stmtReadOnly(stmt)
   var resultChanges: int64 = 0

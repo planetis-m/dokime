@@ -42,13 +42,13 @@ proc addColumnExtractor(t: var NifBuilder; k: ColumnKind) =
   ## Emits the runtime helper symbol for extracting a column of this kind.
   case k
   of ckInteger:
-    t.bindSym("dokimeColumnInt64")
+    t.bindSym("columnInt64")
   of ckText, ckNull:
-    t.bindSym("dokimeColumnString")
+    t.bindSym("columnString")
   of ckReal:
-    t.bindSym("dokimeColumnFloat64")
+    t.bindSym("columnFloat64")
   of ckBlob:
-    t.bindSym("dokimeColumnString")
+    t.bindSym("columnString")
 
 # ---- SQL validation ----
 
@@ -141,21 +141,21 @@ proc buildQueryTree(input: QueryInput; columns: seq[ColumnMeta]): NifBuilder =
         result.addIdent("__dokime_stmt")
         result.addEmptyNode3()
         result.withTree(CallX, NoLineInfo):
-          result.bindSym("dokimePrepareStmt")
+          result.bindSym("prepareStmt")
           result.addSubtree(input.dbExpr)
           result.addStrLit(input.sql)
           result.addIntLit(input.sql.len)
 
       for i, paramCursor in input.params:
         result.withTree(CallX, NoLineInfo):
-          result.bindSym("dokimeBindParam")
+          result.bindSym("bindParam")
           result.addIdent("__dokime_stmt")
           result.addIntLit(i + 1)
           result.addSubtree(paramCursor)
 
       result.withTree(DiscardS, NoLineInfo):
         result.withTree(CallX, NoLineInfo):
-          result.bindSym("dokimeStepPrepared")
+          result.bindSym("stepStmt")
           result.addIdent("__dokime_stmt")
 
       result.withTree(VarS, NoLineInfo):
@@ -171,7 +171,7 @@ proc buildQueryTree(input: QueryInput; columns: seq[ColumnMeta]): NifBuilder =
                 result.addIntLit(i)
 
       result.withTree(CallX, NoLineInfo):
-        result.bindSym("dokimeFinalizePrepared")
+        result.bindSym("finalizeStmt")
         result.addIdent("__dokime_stmt")
 
       result.addIdent("__dokime_row")
@@ -185,20 +185,20 @@ proc buildCommandTree(input: QueryInput): NifBuilder =
         result.addIdent("__dokime_stmt")
         result.addEmptyNode3()
         result.withTree(CallX, NoLineInfo):
-          result.bindSym("dokimePrepareStmt")
+          result.bindSym("prepareStmt")
           result.addSubtree(input.dbExpr)
           result.addStrLit(input.sql)
           result.addIntLit(input.sql.len)
 
       for i, paramCursor in input.params:
         result.withTree(CallX, NoLineInfo):
-          result.bindSym("dokimeBindParam")
+          result.bindSym("bindParam")
           result.addIdent("__dokime_stmt")
           result.addIntLit(i + 1)
           result.addSubtree(paramCursor)
 
       result.withTree(CallX, NoLineInfo):
-        result.bindSym("dokimeExecPrepared")
+        result.bindSym("execStmt")
         result.addSubtree(input.dbExpr)
         result.addIdent("__dokime_stmt")
 
