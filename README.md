@@ -57,8 +57,8 @@ echo row.name  # string — type inferred from schema
 |---|---|---|
 | `src/nsql.nim` | 137 | Public API, runtime helpers, and `query` template |
 | `src/nsql/sqlite3.nim` | 139 | SQLite3 FFI bindings via dynlib |
-| `src/nsqlplug.nim` | 195 | Compile-time plugin (validates SQL, generates NIF code) |
-| **Total** | **471** | |
+| `src/nsqlplug.nim` | 193 | Compile-time plugin (validates SQL, generates NIF code) |
+| **Total** | **469** | |
 
 ## Compile-Time Guarantees
 
