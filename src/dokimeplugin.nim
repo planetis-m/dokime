@@ -72,9 +72,10 @@ proc validateSql(sql: string): tuple[columns: seq[ColumnMeta], error: string] =
       errMsg = "cannot open database: " & msg
     else:
       var stmt: sqlite3.Stmt = nil
+      var s = sql
       let prepRc = sqlite3_prepare_v2(
         db,
-        cast[cstring](readRawData(sql)),
+        toCString(s),
         sql.len.cint,
         stmt,
         nil

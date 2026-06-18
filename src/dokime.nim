@@ -12,9 +12,6 @@ import dokime/sqlite3
 template sqliteTransient(): pointer =
   cast[pointer](-1)
 
-proc stringBytes(s: string): cstring {.inline.} =
-  cast[cstring](readRawData(s))
-
 proc sqliteErrorCode(rc: cint): ErrorCode =
   case rc
   of SQLITE_OK, SQLITE_ROW, SQLITE_DONE:
@@ -98,8 +95,8 @@ proc prepareStmtBytes(
 template prepareStmtSql*(db: sqlite3.DbConn; sql: typed; sqlLen: int): sqlite3.Stmt =
   prepareStmtBytes(db, cstring(sql), sqlLen)
 
-proc prepareStmt*(db: sqlite3.DbConn; sql: string): sqlite3.Stmt {.raises.} =
-  result = prepareStmtBytes(db, stringBytes(sql), sql.len)
+proc prepareStmt*(db: sqlite3.DbConn; sql: var string): sqlite3.Stmt {.raises.} =
+  result = prepareStmtBytes(db, toCString(sql), sql.len)
 
 proc finalizeStmt*(stmt: sqlite3.Stmt) {.raises.} =
   checkSqlite(sqlite3_finalize(stmt))
@@ -114,10 +111,11 @@ proc bindInt64*(stmt: sqlite3.Stmt; idx: int; value: int64) {.raises.} =
   checkSqlite(sqlite3_bind_int64(stmt, idx.cint, value))
 
 proc bindText*(stmt: sqlite3.Stmt; idx: int; value: string) {.raises.} =
+  var v = value
   checkSqlite(sqlite3_bind_text(
     stmt,
     idx.cint,
-    stringBytes(value),
+    toCString(v),
     value.len.cint,
     sqliteTransient()
   ))
@@ -154,7 +152,7 @@ proc columnFloat64*(stmt: sqlite3.Stmt; col: int): float64 =
 
 # ---- Misc ----
 
-proc execSql*(db: sqlite3.DbConn; sql: string) {.raises.} =
+proc execSql*(db: sqlite3.DbConn; sql: var string) {.raises.} =
   let stmt = prepareStmt(db, sql)
   try:
     discard stepStmt(stmt)
