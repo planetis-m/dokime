@@ -8,6 +8,7 @@
 import plugins
 import std / envvars
 import dokime
+import dokime/private/runtime
 import dokime/sqlite3
 
 # ---- Column metadata ----
@@ -41,19 +42,20 @@ proc addColumnExtractor(t: var NifBuilder; k: ColumnKind) =
   ## Emits the runtime helper symbol for extracting a column of this kind.
   case k
   of ckInteger:
-    t.bindSym("columnInt64")
+    t.bindSym("dokimeColumnInt64")
   of ckText, ckNull:
-    t.bindSym("columnString")
+    t.bindSym("dokimeColumnString")
   of ckReal:
-    t.bindSym("columnFloat64")
+    t.bindSym("dokimeColumnFloat64")
   of ckBlob:
-    t.bindSym("columnString")
+    t.bindSym("dokimeColumnString")
 
 # ---- SQL validation ----
 
-proc validateSql(sql: string): tuple[columns: seq[ColumnMeta], error: string] =
+proc validateSql(sql: string): tuple[columns: seq[ColumnMeta], params: int, error: string] =
   var
     columns: seq[ColumnMeta] = @[]
+    params = 0
     errMsg: string = ""
 
   var dbPath = getEnv("DOKIME_DATABASE_PATH")
@@ -83,20 +85,17 @@ proc validateSql(sql: string): tuple[columns: seq[ColumnMeta], error: string] =
       if prepRc != SQLITE_OK:
         errMsg = fromCString(sqlite3_errmsg(db))
       else:
-        let stepRc = sqlite3_step(stmt)
-        if stepRc != SQLITE_ROW and stepRc != SQLITE_DONE:
-          errMsg = fromCString(sqlite3_errmsg(db))
-        else:
-          let count = sqlite3_column_count(stmt)
-          for i in 0..<count.int:
-            let colName = fromCString(sqlite3_column_name(stmt, i.cint))
-            let decltype = sqlite3_column_decltype(stmt, i.cint)
-            let typeStr = if decltype != nil: fromCString(decltype) else: ""
-            columns.add ColumnMeta(name: colName, declaredType: typeStr, kind: toColumnKind(typeStr))
+        params = sqlite3_bind_parameter_count(stmt).int
+        let count = sqlite3_column_count(stmt)
+        for i in 0..<count.int:
+          let colName = fromCString(sqlite3_column_name(stmt, i.cint))
+          let decltype = sqlite3_column_decltype(stmt, i.cint)
+          let typeStr = if decltype != nil: fromCString(decltype) else: ""
+          columns.add ColumnMeta(name: colName, declaredType: typeStr, kind: toColumnKind(typeStr))
         discard sqlite3_finalize(stmt)
       discard sqlite3_close_v2(db)
 
-  result = (columns, errMsg)
+  result = (columns, params, errMsg)
 
 proc parseQueryInput(inp: NifCursor): QueryInput =
   result = QueryInput(
@@ -142,40 +141,82 @@ proc buildQueryTree(input: QueryInput; columns: seq[ColumnMeta]): NifBuilder =
         result.addIdent("__dokime_stmt")
         result.addEmptyNode3()
         result.withTree(CallX, NoLineInfo):
-          result.bindSym("prepareStmtSql")
+          result.bindSym("dokimePrepareStmt")
           result.addSubtree(input.dbExpr)
           result.addStrLit(input.sql)
           result.addIntLit(input.sql.len)
 
       for i, paramCursor in input.params:
         result.withTree(CallX, NoLineInfo):
-          result.bindSym("bindParam")
+          result.bindSym("dokimeBindParam")
           result.addIdent("__dokime_stmt")
           result.addIntLit(i + 1)
           result.addSubtree(paramCursor)
 
       result.withTree(DiscardS, NoLineInfo):
         result.withTree(CallX, NoLineInfo):
-          result.bindSym("stepStmt")
+          result.bindSym("dokimeStepPrepared")
           result.addIdent("__dokime_stmt")
 
-      result.withTree(TupX, NoLineInfo):
-        for i, col in columns:
-          result.withTree(KvX, NoLineInfo):
-            result.addIdent(col.name)
-            result.withTree(CallX, NoLineInfo):
-              result.addColumnExtractor(col.kind)
-              result.addIdent("__dokime_stmt")
-              result.addIntLit(i)
+      result.withTree(VarS, NoLineInfo):
+        result.addIdent("__dokime_row")
+        result.addEmptyNode3()
+        result.withTree(TupX, NoLineInfo):
+          for i, col in columns:
+            result.withTree(KvX, NoLineInfo):
+              result.addIdent(col.name)
+              result.withTree(CallX, NoLineInfo):
+                result.addColumnExtractor(col.kind)
+                result.addIdent("__dokime_stmt")
+                result.addIntLit(i)
+
+      result.withTree(CallX, NoLineInfo):
+        result.bindSym("dokimeFinalizePrepared")
+        result.addIdent("__dokime_stmt")
+
+      result.addIdent("__dokime_row")
+
+proc buildCommandTree(input: QueryInput): NifBuilder =
+  result = createTree()
+  result.withTree(BlockS, input.errorAt):
+    result.addEmptyNode()
+    result.withTree(StmtsS, input.errorAt):
+      result.withTree(VarS, NoLineInfo):
+        result.addIdent("__dokime_stmt")
+        result.addEmptyNode3()
+        result.withTree(CallX, NoLineInfo):
+          result.bindSym("dokimePrepareStmt")
+          result.addSubtree(input.dbExpr)
+          result.addStrLit(input.sql)
+          result.addIntLit(input.sql.len)
+
+      for i, paramCursor in input.params:
+        result.withTree(CallX, NoLineInfo):
+          result.bindSym("dokimeBindParam")
+          result.addIdent("__dokime_stmt")
+          result.addIntLit(i + 1)
+          result.addSubtree(paramCursor)
+
+      result.withTree(CallX, NoLineInfo):
+        result.bindSym("dokimeExecPrepared")
+        result.addSubtree(input.dbExpr)
+        result.addIdent("__dokime_stmt")
 
 proc generate(inp: NifCursor): NifBuilder =
   let query = parseQueryInput(inp)
   if query.error.len > 0:
     result = errorTree(query.error, query.errorAt)
   else:
-    let (columns, errMsg) = validateSql(query.sql)
+    let (columns, params, errMsg) = validateSql(query.sql)
     if errMsg.len > 0:
       result = errorTree("dokime: " & errMsg, query.errorAt)
+    elif params != query.params.len:
+      result = errorTree(
+        "dokime: expected " & $params & " SQL parameter(s), got " & $query.params.len,
+        query.errorAt
+      )
+    elif columns.len == 0:
+      result = buildCommandTree(query)
     else:
       result = buildQueryTree(query, columns)
 

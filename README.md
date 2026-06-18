@@ -21,7 +21,10 @@ echo row.name  # string — column names become field names
   schema — no manual type definitions, no drift between code and schema.
 - **Named tuple fields.** `row.id` and `row.name` come directly from the
   SQL column names. No positional indexing.
-- **Zero-abstracton FFI.** Runtime helpers call libsqlite3 directly.
+- **One SQL surface.** `query()` handles row-returning SQL and command SQL.
+  `INSERT`, `UPDATE`, `DELETE`, DDL, transactions, and maintenance commands
+  are validated at compile time too.
+- **Zero-abstraction FFI.** Runtime helpers call libsqlite3 directly.
   No ORM, no query builder, no allocations you didn't ask for.
 
 ## Requirements
@@ -77,10 +80,10 @@ echo row.name  # string — column names become field names
 | `SELEC id FROM users`                  | Compile error (SQLite parser)    |
 | Using `row.id` as a `string`           | Compile error: `type mismatch`   |
 
-## Beyond `query()` — raw helpers
+## Commands
 
-When you need inserts, schema migrations, or multi-step transactions,
-use the lower-level API:
+Statements that do not return columns execute through the same `query()`
+template and return `SqlExecResult`:
 
 ```nim
 import std / syncio
@@ -88,40 +91,30 @@ import dokime
 
 let db = openDatabase("myapp.db")
 
-execSql(db, """
+discard query(db, """
   CREATE TABLE IF NOT EXISTS counters (
     name  TEXT    NOT NULL,
     value INTEGER NOT NULL DEFAULT 0
   ) STRICT
 """)
 
-var stmt = prepareStmt(db, "INSERT INTO counters VALUES (?, ?)")
-bindParam(stmt, 1, "requests")
-bindParam(stmt, 2, 42'i64)
-discard stepStmt(stmt)
-finalizeStmt(stmt)
+let inserted = query(db, "INSERT INTO counters VALUES (?, ?)", "requests", 42'i64)
+echo inserted.lastInsertRowid
+echo inserted.changes
 
-echo lastInsertRowid(db)   # rowid of the insert
-echo changes(db)           # number of rows changed
+let updated = query(db, "UPDATE counters SET value = value + ? WHERE name = ?", 1'i64, "requests")
+echo updated.changes
 ```
 
 ## API cheat sheet
 
 | Proc / template                           | Purpose                              |
 |-------------------------------------------|--------------------------------------|
-| `query(db, sql, params...)`               | Compile-time validated SELECT        |
+| `query(db, sql, params...)`               | Compile-time validated SQL           |
 | `openDatabase(path)` → `DbConn`           | Open or create a SQLite database     |
 | `closeDatabase(db)`                       | Close the connection                 |
-| `execSql(db, sql)`                        | Execute a statement, discard result  |
-| `prepareStmt(db, sql)` → `Stmt`           | Prepare a statement manually         |
-| `bindParam(stmt, idx, val)`               | Bind `int64`, `string`, or `float64` |
-| `stepStmt(stmt)`                          | Execute and step (returns status)    |
-| `finalizeStmt(stmt)`                      | Finalize a prepared statement        |
-| `columnInt64(stmt, idx)` → `int64`        | Read an INTEGER column               |
-| `columnString(stmt, idx)` → `string`      | Read a TEXT column                   |
-| `columnFloat64(stmt, idx)` → `float64`    | Read a REAL column                   |
-| `lastInsertRowid(db)` → `int64`           | Rowid of last insert                 |
-| `changes(db)` → `int64`                   | Rows changed by last statement       |
+| `SqlExecResult.changes` → `int64`         | Rows changed by a command statement  |
+| `SqlExecResult.lastInsertRowid` → `int64` | Rowid from the command statement     |
 
 ## Run the tests
 
@@ -131,21 +124,25 @@ nimony c -r tests/tffi.nim
 
 # Full integration (compile-time validation + runtime)
 DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/tphase5.nim
+
+# Command statements through query()
+DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/texecute.nim
 ```
 
 ## Limitations
 
 - SQLite only.
-- Single-row fetch (`fetch_one` semantics).
+- Row-returning SQL uses single-row fetch (`fetch_one` semantics).
 - No `Option[T]` for nullable columns yet.
 - `DOKIME_DATABASE_PATH` must be set at compile time (no offline schema cache).
 - STRICT tables required for reliable type inference.
 
 ## Project layout
 
-| File                       | Lines | Purpose                                     |
-|----------------------------|-------|---------------------------------------------|
-| `src/dokime.nim`           | 176   | Public API, runtime helpers, `query` template |
-| `src/dokime/sqlite3.nim`   | 164   | SQLite3 FFI bindings (dynlib)               |
-| `src/dokimeplugin.nim`     | 183   | Compile-time plugin (SQL validation + codegen) |
-| **Total**                  | **523** |                                           |
+| File                         | Purpose                                      |
+|------------------------------|----------------------------------------------|
+| `src/dokime.nim`             | Public API and `query` template              |
+| `src/dokime/types.nim`       | Public result types                          |
+| `src/dokime/sqlite3.nim`     | SQLite3 FFI bindings (dynlib)                |
+| `src/dokime/private/runtime.nim` | Private runtime used by generated code   |
+| `src/dokimeplugin.nim`       | Compile-time plugin (SQL validation + codegen) |

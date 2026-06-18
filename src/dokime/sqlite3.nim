@@ -113,7 +113,13 @@ proc sqlite3_finalize*(s: Stmt): cint {.
 proc sqlite3_reset*(s: Stmt): cint {.
   sql, importc: "sqlite3_reset".}
 
+proc sqlite3_stmt_readonly*(s: Stmt): cint {.
+  sql, importc: "sqlite3_stmt_readonly".}
+
 # ---- Parameter binding ----
+
+proc sqlite3_bind_parameter_count*(s: Stmt): cint {.
+  sql, importc: "sqlite3_bind_parameter_count".}
 
 proc sqlite3_bind_int64*(s: Stmt, idx: cint, value: int64): cint {.
   sql, importc: "sqlite3_bind_int64".}

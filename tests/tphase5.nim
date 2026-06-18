@@ -14,32 +14,15 @@ import ".." / "src" / dokime
 proc main() {.raises.} =
   # Set up test database with seed data
   let db = openDatabase("tests/tphase5.db")
-  var dropSql = "DROP TABLE IF EXISTS users;"
-  execSql(db, dropSql)
-  var createSql = "CREATE TABLE users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT"
-  execSql(db, createSql)
-  var insertSql = "INSERT INTO users VALUES (?, ?, ?)"
-  var stmt = prepareStmt(db, insertSql)
-  bindInt64(stmt, 1, 1'i64)
-  bindText(stmt, 2, "Alice")
-  bindInt64(stmt, 3, 30'i64)
-  discard stepStmt(stmt)
-  finalizeStmt(stmt)
+  discard query(db, "DROP TABLE IF EXISTS users")
+  discard query(db, "CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT")
 
-  var insertSql2 = "INSERT INTO users VALUES (?, ?, ?)"
-  var stmt2 = prepareStmt(db, insertSql2)
-  bindInt64(stmt2, 1, 2'i64)
-  bindText(stmt2, 2, "Bob")
-  bindInt64(stmt2, 3, 25'i64)
-  discard stepStmt(stmt2)
-  finalizeStmt(stmt2)
+  let insert1 = query(db, "INSERT INTO users VALUES (?, ?, ?)", 1'i64, "Alice", 30'i64)
+  assert insert1.changes == 1
+
+  let insert2 = query(db, "INSERT INTO users VALUES (?, ?, ?)", 2'i64, "Bob", 25'i64)
+  assert insert2.changes == 1
   closeDatabase(db)
-
-  # Also set up the validation database to match
-  let validateDb = openDatabase("tests/tvalidate.db")
-  var createSql2 = "CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT;"
-  execSql(validateDb, createSql2)
-  closeDatabase(validateDb)
 
   # Open runtime connection
   let runtimeDb = openDatabase("tests/tphase5.db")

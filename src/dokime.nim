@@ -8,9 +8,10 @@
 ##   echo row.name  # string
 
 import dokime/sqlite3
+import dokime/types
+import dokime/private/runtime
 
-template sqliteTransient(): pointer =
-  cast[pointer](-1)
+export types
 
 proc sqliteErrorCode(rc: cint): ErrorCode =
   case rc
@@ -79,91 +80,6 @@ proc openDatabase*(path: sink string): sqlite3.DbConn {.raises.} =
 
 proc closeDatabase*(db: sqlite3.DbConn) {.raises.} =
   checkSqlite(sqlite3_close_v2(db))
-
-# ---- Statement lifecycle ----
-
-proc prepareStmtBytes(
-  db: sqlite3.DbConn;
-  sql: cstring;
-  sqlLen: int
-): sqlite3.Stmt {.raises.} =
-  var stmt: sqlite3.Stmt = nil
-  let rc = sqlite3_prepare_v2(db, sql, sqlLen.cint, stmt, nil)
-  checkSqlite(rc)
-  result = stmt
-
-template prepareStmtSql*(db: sqlite3.DbConn; sql: typed; sqlLen: int): sqlite3.Stmt =
-  prepareStmtBytes(db, cstring(sql), sqlLen)
-
-proc prepareStmt*(db: sqlite3.DbConn; sql: var string): sqlite3.Stmt {.raises.} =
-  result = prepareStmtBytes(db, toCString(sql), sql.len)
-
-proc finalizeStmt*(stmt: sqlite3.Stmt) {.raises.} =
-  checkSqlite(sqlite3_finalize(stmt))
-
-proc stepStmt*(stmt: sqlite3.Stmt): cint {.raises.} =
-  result = sqlite3_step(stmt)
-  checkSqlite(result)
-
-# ---- Parameter binding ----
-
-proc bindInt64*(stmt: sqlite3.Stmt; idx: int; value: int64) {.raises.} =
-  checkSqlite(sqlite3_bind_int64(stmt, idx.cint, value))
-
-proc bindText*(stmt: sqlite3.Stmt; idx: int; value: string) {.raises.} =
-  var v = value
-  checkSqlite(sqlite3_bind_text(
-    stmt,
-    idx.cint,
-    toCString(v),
-    value.len.cint,
-    sqliteTransient()
-  ))
-
-proc bindFloat64*(stmt: sqlite3.Stmt; idx: int; value: float64) {.raises.} =
-  checkSqlite(sqlite3_bind_double(stmt, idx.cint, value))
-
-# ---- Overloaded bindParam — the plugin generates calls to these ----
-# The compiler picks the right overload based on the argument type at the call site.
-
-proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: int64) {.raises.} =
-  bindInt64(stmt, idx, value)
-
-proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: string) {.raises.} =
-  bindText(stmt, idx, value)
-
-proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: float64) {.raises.} =
-  bindFloat64(stmt, idx, value)
-
-# ---- Column value extraction ----
-
-proc columnInt64*(stmt: sqlite3.Stmt; col: int): int64 =
-  result = sqlite3_column_int64(stmt, col.cint)
-
-proc columnString*(stmt: sqlite3.Stmt; col: int): string =
-  let cstr = sqlite3_column_text(stmt, col.cint)
-  if cstr != nil:
-    result = fromCString(cstr)
-  else:
-    result = ""
-
-proc columnFloat64*(stmt: sqlite3.Stmt; col: int): float64 =
-  result = sqlite3_column_double(stmt, col.cint)
-
-# ---- Misc ----
-
-proc execSql*(db: sqlite3.DbConn; sql: var string) {.raises.} =
-  let stmt = prepareStmt(db, sql)
-  try:
-    discard stepStmt(stmt)
-  finally:
-    finalizeStmt(stmt)
-
-proc lastInsertRowid*(db: sqlite3.DbConn): int64 =
-  result = sqlite3_last_insert_rowid(db)
-
-proc changes*(db: sqlite3.DbConn): int64 =
-  result = sqlite3_changes(db).int64
 
 ## Compile-time validated SQL query.
 ##
