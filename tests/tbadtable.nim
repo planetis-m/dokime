@@ -1,5 +1,4 @@
 ## Negative test: bad table name.
-{.feature: "lenientnils".}
 
 import std/syncio
 import ".." / "src" / dokime

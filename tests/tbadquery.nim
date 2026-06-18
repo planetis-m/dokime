@@ -1,5 +1,4 @@
 ## Negative test: verify compile-time SQL validation.
-{.feature: "lenientnils".}
 
 import std/syncio
 import ".." / "src" / dokime

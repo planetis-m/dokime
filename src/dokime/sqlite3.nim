@@ -3,8 +3,6 @@
 ## Uses dynlib loading to avoid C type mismatches between Nimony's
 ## generated types and sqlite3.h. Types are kept opaque.
 
-{.feature: "lenientnils".}
-
 when defined(windows):
   const SqliteLib = "sqlite3.dll"
 elif defined(macosx):
@@ -20,8 +18,8 @@ type
   Sqlite3Obj* = object
   Sqlite3Stmt* = object
 
-  DbConn* = ptr Sqlite3Obj
-  Stmt* = ptr Sqlite3Stmt
+  DbConn* = nil ptr Sqlite3Obj
+  Stmt* = nil ptr Sqlite3Stmt
 
 # ---- Result codes ----
 
@@ -77,13 +75,13 @@ proc sqlite3_open_v2*(
   filename: cstring,
   ppDb: var DbConn,
   flags: cint,
-  zVfs: cstring
+  zVfs: nil cstring
 ): cint {.sql, importc: "sqlite3_open_v2".}
 
 proc sqlite3_close_v2*(db: DbConn): cint {.
   sql, importc: "sqlite3_close_v2".}
 
-proc sqlite3_errmsg*(db: DbConn): cstring {.
+proc sqlite3_errmsg*(db: DbConn): nil cstring {.
   sql, importc: "sqlite3_errmsg".}
 
 # ---- Simple execution (DDL, no params) ----
@@ -91,9 +89,9 @@ proc sqlite3_errmsg*(db: DbConn): cstring {.
 proc sqlite3_exec*(
   db: DbConn,
   sql: cstring,
-  callback: pointer,
-  callbackArg: pointer,
-  errmsg: ptr cstring
+  callback: nil pointer,
+  callbackArg: nil pointer,
+  errmsg: nil ptr cstring
 ): cint {.sql, importc: "sqlite3_exec".}
 
 # ---- Prepared statements ----
@@ -103,7 +101,7 @@ proc sqlite3_prepare_v2*(
   zSql: cstring,
   nByte: cint,
   ppStmt: var Stmt,
-  pzTail: ptr cstring
+  pzTail: nil ptr cstring
 ): cint {.sql, importc: "sqlite3_prepare_v2".}
 
 proc sqlite3_step*(s: Stmt): cint {.
@@ -123,7 +121,7 @@ proc sqlite3_bind_int64*(s: Stmt, idx: cint, value: int64): cint {.
 proc sqlite3_bind_text*(
   s: Stmt, idx: cint,
   text: cstring, n: cint,
-  destructor: pointer
+  destructor: nil pointer
 ): cint {.sql, importc: "sqlite3_bind_text".}
 
 proc sqlite3_bind_double*(s: Stmt, idx: cint, value: float64): cint {.
@@ -140,16 +138,16 @@ proc sqlite3_column_count*(s: Stmt): cint {.
 proc sqlite3_column_type*(s: Stmt, col: cint): cint {.
   sql, importc: "sqlite3_column_type".}
 
-proc sqlite3_column_name*(s: Stmt, col: cint): cstring {.
+proc sqlite3_column_name*(s: Stmt, col: cint): nil cstring {.
   sql, importc: "sqlite3_column_name".}
 
-proc sqlite3_column_decltype*(s: Stmt, col: cint): cstring {.
+proc sqlite3_column_decltype*(s: Stmt, col: cint): nil cstring {.
   sql, importc: "sqlite3_column_decltype".}
 
 proc sqlite3_column_int64*(s: Stmt, col: cint): int64 {.
   sql, importc: "sqlite3_column_int64".}
 
-proc sqlite3_column_text*(s: Stmt, col: cint): cstring {.
+proc sqlite3_column_text*(s: Stmt, col: cint): nil cstring {.
   sql, importc: "sqlite3_column_text".}
 
 proc sqlite3_column_double*(s: Stmt, col: cint): float64 {.

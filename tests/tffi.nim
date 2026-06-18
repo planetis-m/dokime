@@ -5,8 +5,6 @@
 ##
 ## Compile: nimony c -r tests/tffi.nim
 
-{.feature: "lenientnils".}
-
 import std/syncio
 import ".." / "src" / "dokime" / sqlite3
 

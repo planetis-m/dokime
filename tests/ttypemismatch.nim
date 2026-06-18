@@ -1,5 +1,4 @@
 ## Negative test: type mismatch.
-{.feature: "lenientnils".}
 
 import std/syncio
 import ".." / "src" / dokime

@@ -7,8 +7,6 @@
 ##   DOKIME_DATABASE_PATH=tests/tvalidate.db \
 ##   nimony c -r tests/tphase5.nim
 
-{.feature: "lenientnils".}
-
 import std/syncio
 import std/assertions
 import ".." / "src" / dokime

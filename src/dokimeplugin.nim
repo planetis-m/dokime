@@ -4,7 +4,6 @@
 ## template call. Validates SQL at compile time, then generates a block
 ## expression that prepares, binds, executes, and decodes the query.
 ##
-{.feature: "lenientnils".}
 
 import plugins
 import std / envvars

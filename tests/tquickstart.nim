@@ -2,7 +2,6 @@
 ##
 ## Run:
 ##   DOKIME_DATABASE_PATH=tests/quickstart.db nimony c -r tests/tquickstart.nim
-{.feature: "lenientnils".}
 
 import std/syncio
 import ".." / "src" / dokime
