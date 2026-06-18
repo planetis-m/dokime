@@ -7,8 +7,8 @@
 ##   echo row.id  # int64
 ##   echo row.name  # string
 
-import nsql/sqlite3
-import nsql/runtime
+import sqlite3
+import runtime
 
 export sqlite3.DbConn, sqlite3.Stmt
 export sqlite3.SQLITE_OK, sqlite3.SQLITE_ROW, sqlite3.SQLITE_DONE
@@ -19,7 +19,8 @@ export sqlite3.sqlite3_column_count, sqlite3.sqlite3_column_int64, sqlite3.sqlit
 export sqlite3.sqlite3_errmsg, sqlite3.sqlite3_changes, sqlite3.sqlite3_last_insert_rowid
 
 export runtime.openDatabase, runtime.closeDatabase
-export runtime.prepareStmt, runtime.finalizeStmt, runtime.stepStmt
+export runtime.prepareStmt, runtime.prepareStmtSql
+export runtime.finalizeStmt, runtime.stepStmt
 export runtime.bindParam, runtime.bindInt64, runtime.bindText, runtime.bindFloat64
 export runtime.columnInt64, runtime.columnString, runtime.columnFloat64
 export runtime.execSql, runtime.lastInsertRowid, runtime.changes

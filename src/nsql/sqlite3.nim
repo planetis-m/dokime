@@ -118,6 +118,9 @@ proc sqlite3_column_type*(s: Stmt, col: cint): cint {.
 proc sqlite3_column_name*(s: Stmt, col: cint): cstring {.
   sql, importc: "sqlite3_column_name".}
 
+proc sqlite3_column_decltype*(s: Stmt, col: cint): cstring {.
+  sql, importc: "sqlite3_column_decltype".}
+
 proc sqlite3_column_int64*(s: Stmt, col: cint): int64 {.
   sql, importc: "sqlite3_column_int64".}
 

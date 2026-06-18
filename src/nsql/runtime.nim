@@ -5,15 +5,20 @@
 
 {.feature: "lenientnils".}
 
-import nsql/sqlite3
+import sqlite3
+
+template sqliteTransient(): pointer =
+  cast[pointer](-1)
+
+proc stringBytes(s: string): cstring {.inline.} =
+  cast[cstring](readRawData(s))
 
 # ---- Connection management ----
 
-proc openDatabase*(path: string): DbConn =
+proc openDatabaseCString*(path: cstring): DbConn =
   var db: DbConn = nil
-  var pathMut = path
   let rc = sqlite3_open_v2(
-    toCString(pathMut),
+    path,
     db,
     cint(SQLITE_OPEN_READWRITE or SQLITE_OPEN_CREATE),
     nil
@@ -25,18 +30,29 @@ proc openDatabase*(path: string): DbConn =
     db = nil
   result = db
 
+proc openDatabase*(path: string): DbConn =
+  # SQLite's filename API is NUL-terminated only, so dynamic strings need one
+  # materialized cstring boundary. Length-counted SQL/text paths avoid this.
+  var pathMut = path
+  result = openDatabaseCString(toCString(pathMut))
+
 proc closeDatabase*(db: DbConn) =
   discard sqlite3_close_v2(db)
 
 # ---- Statement lifecycle ----
 
-proc prepareStmt*(db: DbConn, sql: string): Stmt =
+proc prepareStmtBytes*(db: DbConn, sql: cstring, sqlLen: int): Stmt =
   var stmt: Stmt = nil
-  var sqlMut = sql
-  let rc = sqlite3_prepare_v2(db, toCString(sqlMut), sqlMut.len.cint, stmt, nil)
+  let rc = sqlite3_prepare_v2(db, sql, sqlLen.cint, stmt, nil)
   if rc != SQLITE_OK:
     stmt = nil
   result = stmt
+
+template prepareStmtSql*(db: DbConn, sql: typed, sqlLen: int): Stmt =
+  prepareStmtBytes(db, cstring(sql), sqlLen)
+
+proc prepareStmt*(db: DbConn, sql: string): Stmt =
+  result = prepareStmtBytes(db, stringBytes(sql), sql.len)
 
 proc finalizeStmt*(stmt: Stmt) =
   discard sqlite3_finalize(stmt)
@@ -50,8 +66,13 @@ proc bindInt64*(stmt: Stmt, idx: int, value: int64): bool =
   result = sqlite3_bind_int64(stmt, idx.cint, value) == SQLITE_OK
 
 proc bindText*(stmt: Stmt, idx: int, value: string): bool =
-  var valMut = value
-  result = sqlite3_bind_text(stmt, idx.cint, toCString(valMut), valMut.len.cint, cast[pointer](-1)) == SQLITE_OK
+  result = sqlite3_bind_text(
+    stmt,
+    idx.cint,
+    stringBytes(value),
+    value.len.cint,
+    sqliteTransient()
+  ) == SQLITE_OK
 
 proc bindFloat64*(stmt: Stmt, idx: int, value: float64): bool =
   result = sqlite3_bind_double(stmt, idx.cint, value) == SQLITE_OK
@@ -63,8 +84,13 @@ proc bindParam*(stmt: Stmt, idx: int, value: int64) =
   discard sqlite3_bind_int64(stmt, idx.cint, value)
 
 proc bindParam*(stmt: Stmt, idx: int, value: string) =
-  var valMut = value
-  discard sqlite3_bind_text(stmt, idx.cint, toCString(valMut), valMut.len.cint, cast[pointer](-1))
+  discard sqlite3_bind_text(
+    stmt,
+    idx.cint,
+    stringBytes(value),
+    value.len.cint,
+    sqliteTransient()
+  )
 
 proc bindParam*(stmt: Stmt, idx: int, value: float64) =
   discard sqlite3_bind_double(stmt, idx.cint, value)
@@ -87,8 +113,13 @@ proc columnFloat64*(stmt: Stmt, col: int): float64 =
 # ---- Misc ----
 
 proc execSql*(db: DbConn, sql: string): bool =
-  var sqlMut = sql
-  result = sqlite3_exec(db, toCString(sqlMut), nil, nil, nil) == SQLITE_OK
+  let stmt = prepareStmt(db, sql)
+  if stmt == nil:
+    return false
+
+  let rc = sqlite3_step(stmt)
+  discard sqlite3_finalize(stmt)
+  result = rc == SQLITE_DONE or rc == SQLITE_ROW
 
 proc lastInsertRowid*(db: DbConn): int64 =
   result = sqlite3_last_insert_rowid(db)

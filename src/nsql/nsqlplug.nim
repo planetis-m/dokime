@@ -4,49 +4,11 @@
 ## template call. Validates SQL at compile time, then generates a block
 ## expression that prepares, binds, executes, and decodes the query.
 ##
-## This file is self-contained — it inlines SQLite FFI bindings because
-## the plugin is compiled with Nimony's internal library paths only.
-
 {.feature: "lenientnils".}
 
 import plugins
-import std/syncio
-import std/envvars
-
-# ---- Inline SQLite3 FFI ----
-
-{.passL: "-lsqlite3".}
-
-when defined(windows):
-  const SqliteLib = "sqlite3.dll"
-elif defined(macosx):
-  const SqliteLib = "libsqlite3.dylib"
-else:
-  const SqliteLib = "libsqlite3.so"
-
-{.pragma: sql, cdecl, dynlib: SqliteLib.}
-
-type
-  Sqlite3Obj = object
-  Sqlite3Stmt = object
-  DbConn = ptr Sqlite3Obj
-  Stmt = ptr Sqlite3Stmt
-
-const
-  SQLITE_OK: cint    = 0
-  SQLITE_ROW: cint   = 100
-  SQLITE_DONE: cint  = 101
-  SQLITE_OPEN_READWRITE: cint = 2
-
-proc sqlite3_open_v2(filename: cstring, ppDb: var DbConn, flags: cint, zVfs: cstring): cint {.sql, importc: "sqlite3_open_v2".}
-proc sqlite3_close_v2(db: DbConn): cint {.sql, importc: "sqlite3_close_v2".}
-proc sqlite3_errmsg(db: DbConn): cstring {.sql, importc: "sqlite3_errmsg".}
-proc sqlite3_prepare_v2(db: DbConn, zSql: cstring, nByte: cint, ppStmt: var Stmt, pzTail: ptr cstring): cint {.sql, importc: "sqlite3_prepare_v2".}
-proc sqlite3_step(s: Stmt): cint {.sql, importc: "sqlite3_step".}
-proc sqlite3_finalize(s: Stmt): cint {.sql, importc: "sqlite3_finalize".}
-proc sqlite3_column_count(s: Stmt): cint {.sql, importc: "sqlite3_column_count".}
-proc sqlite3_column_decltype(s: Stmt, col: cint): cstring {.sql, importc: "sqlite3_column_decltype".}
-proc sqlite3_column_name(s: Stmt, col: cint): cstring {.sql, importc: "sqlite3_column_name".}
+import std / [envvars, syncio]
+import sqlite3
 
 # ---- Column metadata ----
 
@@ -66,21 +28,26 @@ proc toColumnKind(typeName: string): ColumnKind =
   of "BLOB": ckBlob
   else: ckNull
 
-proc nimTypeFromKind(k: ColumnKind): string =
-  case k
-  of ckInteger: "int64"
-  of ckText: "string"
-  of ckReal: "float64"
-  of ckBlob: "seq[byte]"
-  of ckNull: "string"
+proc addPrepareStmtSql(t: var NifBuilder) =
+  t.addIdent("prepareStmtSql")
 
-proc columnExtractor(k: ColumnKind): string =
-  ## Returns the runtime helper proc name for extracting a column of this kind.
+proc addBindParam(t: var NifBuilder) =
+  t.addIdent("bindParam")
+
+proc addStepStmt(t: var NifBuilder) =
+  t.addIdent("stepStmt")
+
+proc addColumnExtractor(t: var NifBuilder; k: ColumnKind) =
+  ## Emits the runtime helper symbol for extracting a column of this kind.
   case k
-  of ckInteger: "columnInt64"
-  of ckText, ckNull: "columnString"
-  of ckReal: "columnFloat64"
-  of ckBlob: "columnString"
+  of ckInteger:
+    t.addIdent("columnInt64")
+  of ckText, ckNull:
+    t.addIdent("columnString")
+  of ckReal:
+    t.addIdent("columnFloat64")
+  of ckBlob:
+    t.addIdent("columnString")
 
 # ---- SQL validation ----
 
@@ -94,15 +61,25 @@ proc validateSql(sql: string): tuple[columns: seq[ColumnMeta], error: string] =
     errMsg = "NSQL_DATABASE_PATH not set"
   else:
     var dbPathMut = dbPath
-    var db: DbConn = nil
-    let rc = sqlite3_open_v2(toCString(dbPathMut), db, SQLITE_OPEN_READWRITE, nil)
+    var db: sqlite3.DbConn = nil
+    let rc = sqlite3_open_v2(
+      toCString(dbPathMut),
+      db,
+      SQLITE_OPEN_READWRITE,
+      nil
+    )
     if rc != SQLITE_OK:
       let msg = if db != nil: fromCString(sqlite3_errmsg(db)) else: "open failed"
       errMsg = "cannot open database: " & msg
     else:
-      var stmt: Stmt = nil
-      var sqlMut = sql
-      let prepRc = sqlite3_prepare_v2(db, toCString(sqlMut), sqlMut.len.cint, stmt, nil)
+      var stmt: sqlite3.Stmt = nil
+      let prepRc = sqlite3_prepare_v2(
+        db,
+        cast[cstring](readRawData(sql)),
+        sql.len.cint,
+        stmt,
+        nil
+      )
       if prepRc != SQLITE_OK:
         errMsg = fromCString(sqlite3_errmsg(db))
       else:
@@ -183,21 +160,22 @@ else:
   result.withTree(BlockS, NoLineInfo):
     result.addDotToken()  # unlabeled block
     result.withTree(StmtsS, NoLineInfo):
-      # var __nsql_stmt = prepareStmt(db, "SQL")
+      # var __nsql_stmt = prepareStmtSql(db, "SQL", sqlLen)
       result.withTree(VarS, NoLineInfo):
         result.addIdent("__nsql_stmt")
         result.addDotToken()  # type (inferred)
         result.addDotToken()  # pragmas
         result.addDotToken()  # value type
         result.withTree(CallX, NoLineInfo):
-          result.addIdent("prepareStmt")
+          result.addPrepareStmtSql()
           result.addSubtree(dbExpr)
           result.addStrLit(sqlStr)
+          result.addIntLit(sqlStr.len)
 
       # bindParam(__stmt, idx, param) for each parameter
       for i, paramCursor in params:
         result.withTree(CallX, NoLineInfo):
-          result.addIdent("bindParam")
+          result.addBindParam()
           result.addIdent("__nsql_stmt")
           result.addIntLit(i + 1)  # SQLite params are 1-based
           result.addSubtree(paramCursor)
@@ -205,7 +183,7 @@ else:
       # discard stepStmt(__stmt)
       result.withTree(DiscardS, NoLineInfo):
         result.withTree(CallX, NoLineInfo):
-          result.addIdent("stepStmt")
+          result.addStepStmt()
           result.addIdent("__nsql_stmt")
 
       # Result tuple: (kv name (call columnX __stmt idx))
@@ -214,7 +192,7 @@ else:
           result.withTree(KvX, NoLineInfo):
             result.addIdent(col.name)
             result.withTree(CallX, NoLineInfo):
-              result.addIdent(columnExtractor(col.kind))
+              result.addColumnExtractor(col.kind)
               result.addIdent("__nsql_stmt")
               result.addIntLit(i)
 
