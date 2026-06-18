@@ -1,3 +1,5 @@
+import std / opt
+
 import ".." / sqlite3
 import ".." / types
 
@@ -68,6 +70,9 @@ proc stepStmt*(stmt: sqlite3.Stmt): cint {.raises.} =
   result = sqlite3_step(stmt)
   checkSqlite(result)
 
+proc stepHasRow*(stmt: sqlite3.Stmt): bool {.raises.} =
+  result = stepStmt(stmt) == SQLITE_ROW
+
 proc stmtReadOnly(stmt: sqlite3.Stmt): bool =
   result = sqlite3_stmt_readonly(stmt) != 0
 
@@ -108,6 +113,24 @@ proc columnString*(stmt: sqlite3.Stmt; col: int): string =
 
 proc columnFloat64*(stmt: sqlite3.Stmt; col: int): float64 =
   result = sqlite3_column_double(stmt, col.cint)
+
+proc defaultInt64*(): int64 =
+  result = 0'i64
+
+proc defaultString*(): string =
+  result = ""
+
+proc defaultFloat64*(): float64 =
+  result = 0.0
+
+proc missingRow*[T](row: T): T {.raises.} =
+  raise BadOperation
+
+proc someRow*[T](row: T): Opt[T] =
+  result = some(row)
+
+proc noneRow*[T](row: T): Opt[T] =
+  result = none[T]()
 
 proc lastInsertRowid(db: sqlite3.DbConn): int64 =
   result = sqlite3_last_insert_rowid(db)

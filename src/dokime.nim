@@ -7,11 +7,13 @@
 ##   echo row.id  # int64
 ##   echo row.name  # string
 
+import std / opt
 import dokime/sqlite3
 import dokime/types
 import dokime/private/runtime
 
 export types
+export opt
 
 proc sqliteErrorCode(rc: cint): ErrorCode =
   case rc
@@ -88,3 +90,13 @@ proc closeDatabase*(db: sqlite3.DbConn) {.raises.} =
 ##
 ## Example: query(db, "SELECT id, name FROM users WHERE id = ?", userId)
 template query*(): untyped {.varargs, plugin: "dokimeplugin".}
+
+## Compile-time validated SQL query that requires at least one row.
+##
+## Equivalent to row-returning `query`; command SQL still returns SqlExecResult.
+template queryOne*(): untyped {.varargs, plugin: "dokimeplugin".}
+
+## Compile-time validated SQL query that returns Opt[row].
+##
+## Use for row-returning SQL where no row is an expected result.
+template queryOpt*(): untyped {.varargs, plugin: "dokimeoptplugin".}
