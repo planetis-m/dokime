@@ -1,0 +1,9 @@
+nimcache/
+dokime
+dokimeplugin
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+*.db

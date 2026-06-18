@@ -1,13 +1,13 @@
-## nsql — Compile-time validated SQL for Nimony.
+## dokime — Compile-time validated SQL for Nimony.
 ##
 ## Usage:
-##   import nsql
+##   import dokime
 ##   var db = openDatabase("mydb.sqlite")
 ##   let row = query(db, "SELECT id, name FROM users WHERE id = ?", 42'i64)
 ##   echo row.id  # int64
 ##   echo row.name  # string
 
-import nsql/sqlite3
+import dokime/sqlite3
 
 template sqliteTransient(): pointer =
   cast[pointer](-1)
@@ -170,7 +170,7 @@ proc changes*(db: sqlite3.DbConn): int64 =
 ## Compile-time validated SQL query.
 ##
 ## The SQL string is validated against your database at compile time.
-## Set NSQL_DATABASE_PATH to point to your development database.
+## Set DOKIME_DATABASE_PATH to point to your development database.
 ##
 ## Example: query(db, "SELECT id, name FROM users WHERE id = ?", userId)
-template query*(): untyped {.varargs, plugin: "nsqlplug".}
+template query*(): untyped {.varargs, plugin: "dokimeplugin".}

@@ -1,4 +1,4 @@
-# nsql
+# dokime
 
 Compile-time validated SQL for Nimony. SQLite only (for now).
 
@@ -8,7 +8,7 @@ Every SQL string passed to `query()` is validated against your database during c
 If the SQL is invalid, the binary is not produced.
 
 ```nim
-import nsql
+import dokime
 
 let db = openDatabase("myapp.db")
 
@@ -20,7 +20,7 @@ echo row.name  # string — type inferred from schema
 
 ## How It Works
 
-1. **Compile time** (Nimony plugin): connects to `NSQL_DATABASE_PATH`, runs `sqlite3_prepare_v2`
+1. **Compile time** (Nimony plugin): connects to `DOKIME_DATABASE_PATH`, runs `sqlite3_prepare_v2`
    to validate SQL syntax, table/column names, and type compatibility. Extracts column metadata.
 2. **Code generation**: generates a `(block ...)` expression that calls runtime helpers to
    prepare, bind, execute, and decode the query into a typed tuple.
@@ -34,16 +34,16 @@ echo row.name  # string — type inferred from schema
    sqlite3 dev.db "CREATE TABLE users (id INTEGER NOT NULL, name TEXT NOT NULL) STRICT;"
    ```
 
-2. Set `NSQL_DATABASE_PATH` during compilation:
+2. Set `DOKIME_DATABASE_PATH` during compilation:
    ```bash
-   export NSQL_DATABASE_PATH=dev.db
+   export DOKIME_DATABASE_PATH=dev.db
    nimony c -r myapp.nim
    ```
 
    When running directly from this source checkout, import the library with a
    source-relative import (the tests do this) and avoid `--path:src`, because
    Nimony currently gives plugin-bound symbols a different module suffix when
-   the app and the plugin resolve `src/nsql.nim` through different path rules.
+   the app and the plugin resolve `src/dokime.nim` through different path rules.
 
 ## Requirements
 
@@ -55,9 +55,9 @@ echo row.name  # string — type inferred from schema
 
 | File | Lines | Purpose |
 |---|---|---|
-| `src/nsql.nim` | 176 | Public API, runtime helpers, and `query` template |
-| `src/nsql/sqlite3.nim` | 164 | SQLite3 FFI bindings via dynlib |
-| `src/nsqlplug.nim` | 192 | Compile-time plugin (validates SQL, generates NIF code) |
+| `src/dokime.nim` | 176 | Public API, runtime helpers, and `query` template |
+| `src/dokime/sqlite3.nim` | 164 | SQLite3 FFI bindings via dynlib |
+| `src/dokimeplugin.nim` | 192 | Compile-time plugin (validates SQL, generates NIF code) |
 | **Total** | **532** | |
 
 ## Compile-Time Guarantees
@@ -74,5 +74,5 @@ echo row.name  # string — type inferred from schema
 - SQLite only (PostgreSQL is a future goal)
 - Single-row fetch only (`fetch_one` semantics)
 - No nullable column handling (`Option[T]` not yet generated)
-- Requires `NSQL_DATABASE_PATH` set at compile time (no offline cache yet)
+- Requires `DOKIME_DATABASE_PATH` set at compile time (no offline cache yet)
 - STRICT tables required (for reliable type checking)

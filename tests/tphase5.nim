@@ -1,21 +1,21 @@
 ## Phase 5: Integration test with parameterized query.
 ##
-## This test verifies the full library: import nsql, use the query
+## This test verifies the full library: import dokime, use the query
 ## template with bind parameters, and get back a typed result.
 ##
 ## Run:
-##   NSQL_DATABASE_PATH=tests/test_validate.db \
-##   nimony c -r -o:tests/test_phase5 tests/test_phase5.nim
+##   DOKIME_DATABASE_PATH=tests/tvalidate.db \
+##   nimony c -r tests/tphase5.nim
 
 {.feature: "lenientnils".}
 
 import std/syncio
 import std/assertions
-import ".." / "src" / [nsql]
+import ".." / "src" / [dokime]
 
 proc main() {.raises.} =
   # Set up test database with seed data
-  let db = openDatabase("tests/test_phase5.db")
+  let db = openDatabase("tests/tphase5.db")
   execSql(db, "DROP TABLE IF EXISTS users;")
   execSql(db,
     "CREATE TABLE users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT"
@@ -37,7 +37,7 @@ proc main() {.raises.} =
   closeDatabase(db)
 
   # Also set up the validation database to match
-  let validateDb = openDatabase("tests/test_validate.db")
+  let validateDb = openDatabase("tests/tvalidate.db")
   execSql(
     validateDb,
     "CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT;"
@@ -45,7 +45,7 @@ proc main() {.raises.} =
   closeDatabase(validateDb)
 
   # Open runtime connection
-  let runtimeDb = openDatabase("tests/test_phase5.db")
+  let runtimeDb = openDatabase("tests/tphase5.db")
 
   # Parameterized query — validated at compile time, executed at runtime
   let userId = 1'i64

@@ -1,0 +1,5 @@
+version       = "0.1.0"
+author        = "Antonis Geralis"
+description   = "Compile-time validated SQL for Nimony"
+license       = "MIT"
+srcDir        = "src"

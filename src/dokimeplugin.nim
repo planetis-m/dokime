@@ -1,4 +1,4 @@
-## nsql validation and codegen plugin.
+## dokime validation and codegen plugin.
 ##
 ## Receives `(stmts dbExpr "SQL string" param1 param2 ...)` from a varargs
 ## template call. Validates SQL at compile time, then generates a block
@@ -8,8 +8,8 @@
 
 import plugins
 import std / envvars
-import nsql
-import nsql/sqlite3
+import dokime
+import dokime/sqlite3
 
 # ---- Column metadata ----
 
@@ -38,15 +38,6 @@ proc toColumnKind(typeName: string): ColumnKind =
   of "BLOB": ckBlob
   else: ckNull
 
-proc addPrepareStmtSql(t: var NifBuilder) =
-  t.bindSym("prepareStmtSql")
-
-proc addBindParam(t: var NifBuilder) =
-  t.bindSym("bindParam")
-
-proc addStepStmt(t: var NifBuilder) =
-  t.bindSym("stepStmt")
-
 proc addColumnExtractor(t: var NifBuilder; k: ColumnKind) =
   ## Emits the runtime helper symbol for extracting a column of this kind.
   case k
@@ -66,9 +57,9 @@ proc validateSql(sql: string): tuple[columns: seq[ColumnMeta], error: string] =
     columns: seq[ColumnMeta] = @[]
     errMsg: string = ""
 
-  var dbPath = getEnv("NSQL_DATABASE_PATH")
+  var dbPath = getEnv("DOKIME_DATABASE_PATH")
   if dbPath.len == 0:
-    errMsg = "NSQL_DATABASE_PATH not set"
+    errMsg = "DOKIME_DATABASE_PATH not set"
   else:
     var db: sqlite3.DbConn = nil
     let rc = sqlite3_open_v2(
@@ -118,7 +109,7 @@ proc parseQueryInput(inp: NifCursor): QueryInput =
     errorAt: inp
   )
   if inp.kind != ParLe or inp.stmtKind != StmtsS:
-    result.error = "nsql: invalid plugin input"
+    result.error = "dokime: invalid plugin input"
     return
 
   var child = inp
@@ -131,7 +122,7 @@ proc parseQueryInput(inp: NifCursor): QueryInput =
         result.sql = child.stringValue
         result.hasSql = true
       else:
-        result.error = "nsql: second argument must be a SQL string literal"
+        result.error = "dokime: second argument must be a SQL string literal"
         result.errorAt = child
     else:
       result.params.add(child)
@@ -139,7 +130,7 @@ proc parseQueryInput(inp: NifCursor): QueryInput =
     inc result.bindCount
 
   if result.error.len == 0 and not result.hasSql:
-    result.error = "nsql: expected query(db, \"SQL\", params...)"
+    result.error = "dokime: expected query(db, \"SQL\", params...)"
     result.errorAt = inp
 
 proc buildQueryTree(input: QueryInput; columns: seq[ColumnMeta]): NifBuilder =
@@ -148,25 +139,25 @@ proc buildQueryTree(input: QueryInput; columns: seq[ColumnMeta]): NifBuilder =
     result.addEmptyNode()
     result.withTree(StmtsS, input.errorAt.info):
       result.withTree(VarS, NoLineInfo):
-        result.addIdent("__nsql_stmt")
+        result.addIdent("__dokime_stmt")
         result.addEmptyNode3()
         result.withTree(CallX, NoLineInfo):
-          result.addPrepareStmtSql()
+          result.bindSym("prepareStmtSql")
           result.addSubtree(input.dbExpr)
           result.addStrLit(input.sql)
           result.addIntLit(input.sql.len)
 
       for i, paramCursor in input.params:
         result.withTree(CallX, NoLineInfo):
-          result.addBindParam()
-          result.addIdent("__nsql_stmt")
+          result.bindSym("bindParam")
+          result.addIdent("__dokime_stmt")
           result.addIntLit(i + 1)
           result.addSubtree(paramCursor)
 
       result.withTree(DiscardS, NoLineInfo):
         result.withTree(CallX, NoLineInfo):
-          result.addStepStmt()
-          result.addIdent("__nsql_stmt")
+          result.bindSym("stepStmt")
+          result.addIdent("__dokime_stmt")
 
       result.withTree(TupX, NoLineInfo):
         for i, col in columns:
@@ -174,7 +165,7 @@ proc buildQueryTree(input: QueryInput; columns: seq[ColumnMeta]): NifBuilder =
             result.addIdent(col.name)
             result.withTree(CallX, NoLineInfo):
               result.addColumnExtractor(col.kind)
-              result.addIdent("__nsql_stmt")
+              result.addIdent("__dokime_stmt")
               result.addIntLit(i)
 
 proc generate(inp: NifCursor): NifBuilder =
@@ -184,7 +175,7 @@ proc generate(inp: NifCursor): NifBuilder =
   else:
     let (columns, errMsg) = validateSql(query.sql)
     if errMsg.len > 0:
-      result = errorTree("nsql: " & errMsg, query.errorAt)
+      result = errorTree("dokime: " & errMsg, query.errorAt)
     else:
       result = buildQueryTree(query, columns)
 
