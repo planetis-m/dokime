@@ -28,7 +28,7 @@ type
     bindCount: int
     hasSql: bool
     error: string
-    errorAt: NifCursor
+    errorAt: LineInfo
 
 proc toColumnKind(typeName: string): ColumnKind =
   case typeName
@@ -106,7 +106,7 @@ proc parseQueryInput(inp: NifCursor): QueryInput =
     bindCount: 0,
     hasSql: false,
     error: "",
-    errorAt: inp
+    errorAt: inp.info
   )
   if inp.kind != ParLe or inp.stmtKind != StmtsS:
     result.error = "dokime: invalid plugin input"
@@ -123,7 +123,7 @@ proc parseQueryInput(inp: NifCursor): QueryInput =
         result.hasSql = true
       else:
         result.error = "dokime: second argument must be a SQL string literal"
-        result.errorAt = child
+        result.errorAt = child.info
     else:
       result.params.add(child)
     skip child
@@ -131,13 +131,13 @@ proc parseQueryInput(inp: NifCursor): QueryInput =
 
   if result.error.len == 0 and not result.hasSql:
     result.error = "dokime: expected query(db, \"SQL\", params...)"
-    result.errorAt = inp
+    result.errorAt = inp.info
 
 proc buildQueryTree(input: QueryInput; columns: seq[ColumnMeta]): NifBuilder =
   result = createTree()
-  result.withTree(BlockS, input.errorAt.info):
+  result.withTree(BlockS, input.errorAt):
     result.addEmptyNode()
-    result.withTree(StmtsS, input.errorAt.info):
+    result.withTree(StmtsS, input.errorAt):
       result.withTree(VarS, NoLineInfo):
         result.addIdent("__dokime_stmt")
         result.addEmptyNode3()
