@@ -55,10 +55,10 @@ echo row.name  # string — type inferred from schema
 
 | File | Lines | Purpose |
 |---|---|---|
-| `src/nsql.nim` | 138 | Public API, runtime helpers, and `query` template |
+| `src/nsql.nim` | 137 | Public API, runtime helpers, and `query` template |
 | `src/nsql/sqlite3.nim` | 139 | SQLite3 FFI bindings via dynlib |
-| `src/nsqlplug.nim` | 192 | Compile-time plugin (validates SQL, generates NIF code) |
-| **Total** | **469** | |
+| `src/nsqlplug.nim` | 195 | Compile-time plugin (validates SQL, generates NIF code) |
+| **Total** | **471** | |
 
 ## Compile-Time Guarantees
 
