@@ -1,11 +1,15 @@
 import std/opt
 
-import ".." / [sqlite3, types]
+import ".." / sqlite3
 
 type
   RowSet*[T: tuple] = object
     stmt: sqlite3.Stmt
     rowShape: T
+
+  SqlExecResult* = object
+    changes*: int64
+    lastInsertRowid*: int64
 
 template sqliteTransient(): pointer =
   cast[pointer](-1)
@@ -53,6 +57,26 @@ proc checkSqlite(rc: cint) {.raises.} =
   let err = sqliteErrorCode(rc)
   if err != Success:
     raise err
+
+proc openDatabaseCString(path: cstring): sqlite3.DbConn {.raises.} =
+  var db: sqlite3.DbConn = nil
+  let rc = sqlite3_open_v2(
+    path,
+    db,
+    cint(SQLITE_OPEN_READWRITE or SQLITE_OPEN_CREATE),
+    nil
+  )
+  if rc != SQLITE_OK:
+    if db != nil:
+      discard sqlite3_close_v2(db)
+    checkSqlite(rc)
+  result = db
+
+proc openDatabase*(path: sink string): sqlite3.DbConn {.raises.} =
+  result = openDatabaseCString(toCString(path))
+
+proc closeDatabase*(db: sqlite3.DbConn) {.raises.} =
+  checkSqlite(sqlite3_close_v2(db))
 
 proc prepareStmtBytes(
   db: sqlite3.DbConn;
