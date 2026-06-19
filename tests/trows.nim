@@ -16,8 +16,8 @@ proc main() {.raises.} =
     count = count + 1
     names = names & user.name
 
-  assert count == 2
-  assert names == "AliceBob"
+  assert count == 2, "expected 2 rows, got " & $count
+  assert names == "AliceBob", "expected AliceBob, got " & names
   closeDatabase(db)
 
 try:

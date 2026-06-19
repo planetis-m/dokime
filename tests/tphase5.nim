@@ -1,6 +1,6 @@
 ## Integration test: parameterized query with compile-time validation.
 
-import std/[syncio, assertions]
+import std/[assertions, syncio]
 import ".." / "src" / dokime
 
 proc main() {.raises.} =
@@ -28,8 +28,7 @@ proc main() {.raises.} =
   assert row.name == "Alice"
   assert row.age == 30
   closeDatabase(runtimeDb)
-  echo ""
-  echo "Phase 5 passed: parameterized query works end-to-end."
+  echo "\nPhase 5 passed: parameterized query works end-to-end."
 
 try:
   main()

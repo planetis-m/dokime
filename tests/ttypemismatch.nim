@@ -3,7 +3,10 @@
 
 import ".." / "src" / dokime
 
-let db = openDatabase("tests/validate.db")
-let row = query(db, "SELECT id, name FROM users WHERE id = ?", 1'i64)
-let x: float64 = row.id
-discard x
+proc main() =
+  let db = openDatabase("tests/validate.db")
+  let row = query(db, "SELECT id, name FROM users WHERE id = ?", 1'i64)
+  let x: float64 = row.id
+  discard x
+
+main()

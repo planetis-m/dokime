@@ -12,9 +12,9 @@ proc checkMissingRaises(db: sqlite3.DbConn) {.raises.} =
   try:
     missingQuery(db)
   except ErrorCode as e:
-    assert e == BadOperation
+    assert e == BadOperation, "expected BadOperation, got " & $e
     raised = true
-  assert raised
+  assert raised, "missing query should raise BadOperation"
 
 proc main() {.raises.} =
   let db = openDatabase("tests/tquerycardinality.db")
