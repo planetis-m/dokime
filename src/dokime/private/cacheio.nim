@@ -73,12 +73,10 @@ proc readU32(state: var DecodeState): uint32 =
   state.pos += 4
 
 proc readString(state: var DecodeState): string =
-  result = ""
   let n = int(state.readU32())
   if not state.needBytes(n):
     return
-  for i in 0..<n:
-    result.add state.data[state.pos + i]
+  result = substr(state.data, state.pos, state.pos + n - 1)
   state.pos += n
 
 proc encodeCache*(sql: string; columns: seq[ColumnMeta]; params: int): string =
