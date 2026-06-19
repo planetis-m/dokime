@@ -1,8 +1,7 @@
 ## Shared implementation for dokime query template plugins.
 
+import std/[envvars, opt]
 import plugins
-import std / envvars
-import std / opt
 import runtime
 import ".." / sqlite3
 

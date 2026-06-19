@@ -1,7 +1,6 @@
-import std / opt
+import std/opt
 
-import ".." / sqlite3
-import ".." / types
+import ".." / [sqlite3, types]
 
 type
   RowSet*[T: tuple] = object

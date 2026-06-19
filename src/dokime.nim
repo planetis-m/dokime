@@ -7,13 +7,11 @@
 ##   echo row.id  # int64
 ##   echo row.name  # string
 
-import std / opt
-import dokime/sqlite3
-import dokime/types
+import std/opt
+import dokime/[sqlite3, types]
 import dokime/private/runtime
 
-export types
-export opt
+export opt, types
 
 proc sqliteErrorCode(rc: cint): ErrorCode {.raises: [].} =
   case rc
