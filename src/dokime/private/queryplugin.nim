@@ -303,11 +303,11 @@ proc buildRowTree(
             result.addIdent("__dokime_stmt")
 
         result.withTree(CallX, NoLineInfo):
-          result.bindSym("checkFinalizeCode")
-          result.addIdent("__dokime_finalize")
-        result.withTree(CallX, NoLineInfo):
           result.bindSym("checkStepCode")
           result.addIdent("__dokime_step")
+        result.withTree(CallX, NoLineInfo):
+          result.bindSym("checkFinalizeCode")
+          result.addIdent("__dokime_finalize")
 
         if mode == qmOne:
           result.withTree(CallX, NoLineInfo):

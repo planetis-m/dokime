@@ -91,21 +91,11 @@ proc prepareStmtBytes(
 template prepareStmt*(db: sqlite3.DbConn; sql: typed; sqlLen: int): sqlite3.Stmt =
   prepareStmtBytes(db, cstring(sql), sqlLen)
 
-proc finalizeStmt*(stmt: sqlite3.Stmt) {.raises.} =
-  checkSqlite(sqlite3_finalize(stmt))
-
 proc finalizeStmtCode*(stmt: sqlite3.Stmt): cint {.raises: [].} =
   result = sqlite3_finalize(stmt)
 
-proc stepStmt*(stmt: sqlite3.Stmt): cint {.raises.} =
-  result = sqlite3_step(stmt)
-  checkSqlite(result)
-
 proc stepStmtCode*(stmt: sqlite3.Stmt): cint {.raises: [].} =
   result = sqlite3_step(stmt)
-
-proc stepHasRow*(stmt: sqlite3.Stmt): bool {.raises.} =
-  result = stepStmt(stmt) == SQLITE_ROW
 
 proc stepReturnedRow*(rc: cint): bool {.raises: [].} =
   result = rc == SQLITE_ROW
@@ -207,26 +197,43 @@ proc decodeRow[T: tuple](rows: RowSet[T]): T {.raises: [].} =
     inc col
 
 iterator items*[T: tuple](rows: RowSet[T]): T {.sideEffect, raises.} =
+  var
+    stepRc = SQLITE_OK
+    finalizeRc = SQLITE_OK
+    exhausted = false
   try:
-    while stepHasRow(rows.stmt):
-      yield decodeRow(rows)
+    while true:
+      stepRc = stepStmtCode(rows.stmt)
+      if stepRc == SQLITE_ROW:
+        yield decodeRow(rows)
+      else:
+        exhausted = true
+        break
   finally:
-    finalizeStmt(rows.stmt)
+    finalizeRc = finalizeStmtCode(rows.stmt)
+  if exhausted:
+    checkStepCode(stepRc)
+    checkFinalizeCode(finalizeRc)
 
 proc execStmt*(db: sqlite3.DbConn; stmt: sqlite3.Stmt): SqlExecResult {.raises.} =
   result = SqlExecResult(changes: 0, lastInsertRowid: 0)
   let readOnly = sqlite3_stmt_readonly(stmt) != 0
-  var resultChanges: int64 = 0
-  var resultLastInsertRowid: int64 = 0
-  try:
-    discard stepStmt(stmt)
+  let stepRc = stepStmtCode(stmt)
+  var
+    resultChanges: int64 = 0
+    resultLastInsertRowid: int64 = 0
+
+  if stepRc == SQLITE_ROW or stepRc == SQLITE_DONE:
     if readOnly:
       resultChanges = 0
     else:
       resultChanges = sqlite3_changes(db).int64
     resultLastInsertRowid = sqlite3_last_insert_rowid(db)
-  finally:
-    finalizeStmt(stmt)
+
+  let finalizeRc = finalizeStmtCode(stmt)
+  checkStepCode(stepRc)
+  checkFinalizeCode(finalizeRc)
+
   result = SqlExecResult(
     changes: resultChanges,
     lastInsertRowid: resultLastInsertRowid
