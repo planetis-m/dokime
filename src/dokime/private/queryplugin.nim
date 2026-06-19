@@ -1,9 +1,14 @@
 ## Shared implementation for dokime query template plugins.
 
-import std/[envvars, opt]
+import std/[dirs, envvars, opt, os, syncio]
 import plugins
 import runtime
 import ".." / sqlite3
+
+const
+  CacheMagic = "DKC1"
+  CacheVersion = 1'u32
+  DefaultCacheRoot = ".dokime"
 
 type
   QueryMode* = enum
@@ -19,6 +24,15 @@ type
     kind: ColumnKind
     nullable: bool
 
+  SqlHash = object
+    a: uint32
+    b: uint32
+
+  DecodeState = object
+    data: string
+    pos: int
+    error: string
+
   QueryInput = object
     dbExpr: NifCursor
     sql: string
@@ -27,6 +41,170 @@ type
     hasSql: bool
     error: string
     errorAt: LineInfo
+
+proc cacheQueriesDir(): string =
+  result = DefaultCacheRoot / "queries"
+
+proc hashSql(sql: string): SqlHash =
+  result = SqlHash(a: 2166136261'u32, b: 5381'u32)
+  for ch in sql:
+    result.a = (result.a xor uint32(ord(ch))) * 16777619'u32
+    result.b = ((result.b shl 5) + result.b) xor uint32(ord(ch))
+
+proc addHexByte(result: var string; value: uint32) =
+  const Hex = "0123456789abcdef"
+  result.add Hex[int((value shr 4) and 0xf'u32)]
+  result.add Hex[int(value and 0xf'u32)]
+
+proc addHex32(result: var string; value: uint32) =
+  result.addHexByte((value shr 24) and 0xff'u32)
+  result.addHexByte((value shr 16) and 0xff'u32)
+  result.addHexByte((value shr 8) and 0xff'u32)
+  result.addHexByte(value and 0xff'u32)
+
+proc cacheFilePath(sql: string): string =
+  let h = hashSql(sql)
+  var filename = ""
+  filename.addHex32(h.a)
+  filename.addHex32(h.b)
+  filename.add ".dkc"
+  result = cacheQueriesDir() / filename
+
+proc addU8(data: var string; value: uint8) =
+  data.add char(int(value))
+
+proc addU32(data: var string; value: uint32) =
+  data.add char(int(value and 0xff'u32))
+  data.add char(int((value shr 8) and 0xff'u32))
+  data.add char(int((value shr 16) and 0xff'u32))
+  data.add char(int((value shr 24) and 0xff'u32))
+
+proc addString(data: var string; value: string) =
+  data.addU32 uint32(value.len)
+  data.add value
+
+proc needBytes(state: var DecodeState; count: int): bool =
+  if state.error.len > 0:
+    return false
+  if count < 0 or state.pos + count > state.data.len:
+    state.error = "cache file is truncated"
+    return false
+  result = true
+
+proc readU8(state: var DecodeState): uint8 =
+  if not state.needBytes(1):
+    return 0'u8
+  result = uint8(ord(state.data[state.pos]))
+  inc state.pos
+
+proc readU32(state: var DecodeState): uint32 =
+  if not state.needBytes(4):
+    return 0'u32
+  result =
+    uint32(ord(state.data[state.pos])) or
+    (uint32(ord(state.data[state.pos + 1])) shl 8) or
+    (uint32(ord(state.data[state.pos + 2])) shl 16) or
+    (uint32(ord(state.data[state.pos + 3])) shl 24)
+  state.pos += 4
+
+proc readString(state: var DecodeState): string =
+  result = ""
+  let n = int(state.readU32())
+  if not state.needBytes(n):
+    return
+  for i in 0..<n:
+    result.add state.data[state.pos + i]
+  state.pos += n
+
+proc encodeCache(sql: string; columns: seq[ColumnMeta]; params: int): string =
+  let h = hashSql(sql)
+  result = CacheMagic
+  result.addU32 CacheVersion
+  result.addU32 h.a
+  result.addU32 h.b
+  result.addString sql
+  result.addU32 uint32(params)
+  result.addU32 uint32(columns.len)
+  for col in columns:
+    result.addString col.name
+    result.addU8 uint8(ord(col.kind))
+    result.addU8 if col.nullable: 1'u8 else: 0'u8
+
+proc decodeCache(data: string; expectedSql: string):
+    tuple[columns: seq[ColumnMeta], params: int, error: string] =
+  result = (columns: @[], params: 0, error: "")
+  var state = DecodeState(data: data, pos: 0, error: "")
+  if not state.needBytes(CacheMagic.len):
+    result.error = state.error
+    return
+  for ch in CacheMagic:
+    if state.data[state.pos] != ch:
+      result.error = "cache file has invalid magic"
+      return
+    inc state.pos
+
+  let version = state.readU32()
+  if state.error.len > 0:
+    result.error = state.error
+    return
+  if version != CacheVersion:
+    result.error = "unsupported cache version " & $version & " (expected " & $CacheVersion & ")"
+    return
+
+  let expectedHash = hashSql(expectedSql)
+  let hashA = state.readU32()
+  let hashB = state.readU32()
+  if hashA != expectedHash.a or hashB != expectedHash.b:
+    result.error = "cache hash does not match SQL"
+    return
+
+  let cachedSql = state.readString()
+  if cachedSql != expectedSql:
+    result.error = "cache SQL does not match query text"
+    return
+
+  result.params = int(state.readU32())
+  let columnCount = int(state.readU32())
+  if columnCount < 0:
+    result.error = "cache has invalid column count"
+    return
+
+  for _ in 0..<columnCount:
+    let name = state.readString()
+    let kindValue = int(state.readU8())
+    let nullable = state.readU8() != 0'u8
+    if kindValue < ord(low(ColumnKind)) or kindValue > ord(high(ColumnKind)):
+      result.error = "cache has invalid column kind"
+      return
+    result.columns.add ColumnMeta(
+      name: name,
+      kind: cast[ColumnKind](kindValue),
+      nullable: nullable
+    )
+
+  if state.error.len > 0:
+    result.error = state.error
+  elif state.pos != state.data.len:
+    result.error = "cache file has trailing bytes"
+
+proc writeCache(sql: string; columns: seq[ColumnMeta]; params: int) =
+  try:
+    let dir = cacheQueriesDir()
+    dirs.createDir(dirs.path(dir))
+    writeFile(cacheFilePath(sql), encodeCache(sql, columns, params))
+  except:
+    discard
+
+proc readCache(sql: string): tuple[columns: seq[ColumnMeta], params: int, error: string] =
+  let path = cacheFilePath(sql)
+  if not fileExists(path):
+    result = (columns: @[], params: 0,
+      error: "offline cache entry not found for this SQL; build once with DOKIME_DATABASE_PATH set")
+  else:
+    try:
+      result = decodeCache(readFile(path), sql)
+    except:
+      result = (columns: @[], params: 0, error: "cannot read offline cache entry")
 
 proc toColumnKind(typeName: string): ColumnKind =
   case typeName
@@ -156,7 +334,8 @@ proc validateSql(sql: string): tuple[columns: seq[ColumnMeta], params: int, erro
 
   var dbPath = getEnv("DOKIME_DATABASE_PATH")
   if dbPath.len == 0:
-    errMsg = "DOKIME_DATABASE_PATH not set"
+    result = readCache(sql)
+    return
   else:
     var db: sqlite3.DbConn = nil
     let rc = sqlite3_open_v2(toCString(dbPath), db, SQLITE_OPEN_READWRITE, nil)
@@ -183,6 +362,9 @@ proc validateSql(sql: string): tuple[columns: seq[ColumnMeta], params: int, erro
           )
         discard sqlite3_finalize(stmt)
       discard sqlite3_close_v2(db)
+
+  if errMsg.len == 0:
+    writeCache(sql, columns, params)
 
   result = (columns, params, errMsg)
 

@@ -9,3 +9,4 @@ nimcache/
 *.db
 tests/tester
 tests/tester.exe
+tests/.nimony-cache/

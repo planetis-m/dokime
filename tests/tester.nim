@@ -9,6 +9,8 @@
 import std/[assertions, os]
 
 const ValidateDb = "tests/validate.db"
+const ValidateCache = ".dokime"
+const NimonyCache = "tests/.nimony-cache"
 
 const Positive = [
   "tffi.nim",
@@ -28,6 +30,10 @@ const Negative = [
   "ttypemismatch.nim"
 ]
 
+const OfflineOnly = [
+  "tofflinecache.nim"
+]
+
 proc ensureValidateDb() =
   if fileExists(ValidateDb):
     return
@@ -41,26 +47,48 @@ proc ensureValidateDb() =
 
 proc runPositive(name: string) =
   echo "  [positive] " & name
-  let cmd = "DOKIME_DATABASE_PATH=" & ValidateDb & " nimony c -r tests/" & name
+  let cmd = "DOKIME_DATABASE_PATH=" & ValidateDb & " nimony --nimcache:" & NimonyCache &
+    " --ff c -r tests/" & name
   assert execShellCmd(cmd) == 0, name & " should have compiled and run"
+
+proc runPositiveOffline(name: string) =
+  echo "  [offline] " & name
+  let cmd = "DOKIME_DATABASE_PATH= nimony --nimcache:" & NimonyCache &
+    " --ff c -r tests/" & name
+  assert execShellCmd(cmd) == 0, name & " should have compiled and run offline"
 
 proc runNegative(name: string) =
   echo "  [negative] " & name
-  let cmd = "DOKIME_DATABASE_PATH=" & ValidateDb & " nimony c tests/" & name
+  let cmd = "DOKIME_DATABASE_PATH=" & ValidateDb & " nimony --nimcache:" & NimonyCache &
+    " --ff c tests/" & name
   assert execShellCmd(cmd) != 0, name & " should have failed to compile"
+
+proc removeGeneratedDirs() =
+  if dirExists(ValidateCache):
+    removeDir(ValidateCache)
+  if dirExists(NimonyCache):
+    removeDir(NimonyCache)
 
 proc main() =
   echo "Setting up validation database..."
   ensureValidateDb()
+  removeGeneratedDirs()
 
   echo "Running positive tests..."
   for name in Positive:
     runPositive(name)
 
+  echo "Running offline positive tests..."
+  for name in Positive:
+    runPositiveOffline(name)
+  for name in OfflineOnly:
+    runPositiveOffline(name)
+
   echo "Running negative tests..."
   for name in Negative:
     runNegative(name)
 
-  echo "\nAll " & $(Positive.len + Negative.len) & " tests passed."
+  removeGeneratedDirs()
+  echo "\nAll " & $(Positive.len * 2 + OfflineOnly.len + Negative.len) & " tests passed."
 
 main()

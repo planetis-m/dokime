@@ -76,6 +76,14 @@ if maybeRow.isNone:
    nimony c -r myapp.nim
    ```
 
+Online builds write validated query metadata to `.dokime/queries/`. Commit that
+directory if you want CI or another machine to compile without a live
+development database:
+
+```bash
+DOKIME_DATABASE_PATH= nimony c -r myapp.nim
+```
+
 ## What gets caught at compile time
 
 | Mistake                                | Result                           |
@@ -215,5 +223,6 @@ Nimony, and verifies that negative tests fail with the expected compile errors.
 - SQLite only.
 - `query()` and `queryOne()` use single-row fetch (`fetch_one` semantics);
   extra rows are not checked yet. Use `rows()` to stream many rows.
-- `DOKIME_DATABASE_PATH` must be set at compile time (no offline schema cache).
+- Offline builds read previously validated query cache entries; there is not a
+  dedicated `dokime prepare` command yet.
 - STRICT tables required for reliable type inference.
