@@ -49,11 +49,12 @@ proc addString(data: var string; value: string) =
 
 proc needBytes(state: var DecodeState; count: int): bool =
   if state.error.len > 0:
-    return false
-  if state.pos + count > state.data.len:
+    result = false
+  elif state.pos + count > state.data.len:
     state.error = "cache file is truncated"
-    return false
-  result = true
+    result = false
+  else:
+    result = true
 
 proc readU8(state: var DecodeState): uint8 =
   if not state.needBytes(1):
