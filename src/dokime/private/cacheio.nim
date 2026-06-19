@@ -94,23 +94,22 @@ proc encodeCache*(sql: string; columns: seq[ColumnMeta]; params: int): string =
 proc decodeCache*(data: string; expectedSql: string): CacheEntry =
   var state = DecodeState(data: data, pos: 0, error: "")
   if not state.needBytes(CacheMagic.len):
-    return CacheEntry(columns: @[], params: 0, error: state.error)
+    return CacheEntry(error: state.error)
   for ch in CacheMagic:
     if state.data[state.pos] != ch:
-      return CacheEntry(columns: @[], params: 0, error: "cache file has invalid magic")
+      return CacheEntry(error: "cache file has invalid magic")
     inc state.pos
 
   let version = state.readU32()
   if state.error.len > 0:
-    return CacheEntry(columns: @[], params: 0, error: state.error)
+    return CacheEntry(error: state.error)
   if version != CacheVersion:
-    return CacheEntry(columns: @[], params: 0,
-        error: "unsupported cache version " & $version &
+    return CacheEntry(error: "unsupported cache version " & $version &
         " (expected " & $CacheVersion & ")")
 
   let cachedSql = state.readString()
   if cachedSql != expectedSql:
-    return CacheEntry(columns: @[], params: 0, error: "cache SQL does not match query text")
+    return CacheEntry(error: "cache SQL does not match query text")
 
   let params = int(state.readU32())
   let columnCount = int(state.readU32())
@@ -121,7 +120,7 @@ proc decodeCache*(data: string; expectedSql: string): CacheEntry =
     let kindValue = int(state.readU8())
     let nullable = state.readU8() != 0'u8
     if kindValue < ord(low(ColumnKind)) or kindValue > ord(high(ColumnKind)):
-      return CacheEntry(columns: @[], params: 0, error: "cache has invalid column kind")
+      return CacheEntry(error: "cache has invalid column kind")
     columns.add ColumnMeta(
       name: name,
       kind: cast[ColumnKind](kindValue),
@@ -129,9 +128,9 @@ proc decodeCache*(data: string; expectedSql: string): CacheEntry =
     )
 
   if state.error.len > 0:
-    return CacheEntry(columns: @[], params: 0, error: state.error)
+    return CacheEntry(error: state.error)
   if state.pos != state.data.len:
-    return CacheEntry(columns: @[], params: 0, error: "cache file has trailing bytes")
+    return CacheEntry(error: "cache file has trailing bytes")
   result = CacheEntry(columns: columns, params: params)
 
 proc writeCache*(sql: string; columns: seq[ColumnMeta]; params: int) =
@@ -145,10 +144,10 @@ proc writeCache*(sql: string; columns: seq[ColumnMeta]; params: int) =
 proc readCache*(sql: string): CacheEntry =
   let path = cacheFilePath(sql)
   if not fileExists(path):
-    result = CacheEntry(columns: @[], params: 0,
+    result = CacheEntry(
       error: "offline cache entry not found for this SQL; build once with DOKIME_DATABASE_PATH set")
   else:
     try:
       result = decodeCache(readFile(path), sql)
     except:
-      result = CacheEntry(columns: @[], params: 0, error: "cannot read offline cache entry")
+      result = CacheEntry(error: "cannot read offline cache entry")

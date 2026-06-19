@@ -152,7 +152,7 @@ proc validateSql(sql: string): CacheEntry =
   let rc = sqlite3_open_v2(toCString(dbPath), db, SQLITE_OPEN_READWRITE, nil)
   if rc != SQLITE_OK:
     let msg = if db != nil: fromCString(sqlite3_errmsg(db)) else: "open failed"
-    return CacheEntry(columns: @[], params: 0, error: "cannot open database: " & msg)
+    return CacheEntry(error: "cannot open database: " & msg)
 
   var stmt: sqlite3.Stmt = nil
   var s = sql
@@ -160,7 +160,7 @@ proc validateSql(sql: string): CacheEntry =
   if prepRc != SQLITE_OK:
     let errMsg = fromCString(sqlite3_errmsg(db))
     discard sqlite3_close_v2(db)
-    return CacheEntry(columns: @[], params: 0, error: errMsg)
+    return CacheEntry(error: errMsg)
 
   let params = sqlite3_bind_parameter_count(stmt).int
   let count = sqlite3_column_count(stmt)
