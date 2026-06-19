@@ -24,10 +24,6 @@ type
     kind: ColumnKind
     nullable: bool
 
-  SqlHash = object
-    a: uint32
-    b: uint32
-
   DecodeState = object
     data: string
     pos: int
@@ -45,12 +41,6 @@ type
 proc cacheQueriesDir(): string =
   result = DefaultCacheRoot / "queries"
 
-proc hashSql(sql: string): SqlHash =
-  result = SqlHash(a: 2166136261'u32, b: 5381'u32)
-  for ch in sql:
-    result.a = (result.a xor uint32(ord(ch))) * 16777619'u32
-    result.b = ((result.b shl 5) + result.b) xor uint32(ord(ch))
-
 proc addHexByte(result: var string; value: uint32) =
   const Hex = "0123456789abcdef"
   result.add Hex[int((value shr 4) and 0xf'u32)]
@@ -62,13 +52,20 @@ proc addHex32(result: var string; value: uint32) =
   result.addHexByte((value shr 8) and 0xff'u32)
   result.addHexByte(value and 0xff'u32)
 
+proc cacheFileName(sql: string): string =
+  var
+    hashA = 2166136261'u32
+    hashB = 5381'u32
+  for ch in sql:
+    hashA = (hashA xor uint32(ord(ch))) * 16777619'u32
+    hashB = ((hashB shl 5) + hashB) xor uint32(ord(ch))
+  result = ""
+  result.addHex32(hashA)
+  result.addHex32(hashB)
+  result.add ".dkc"
+
 proc cacheFilePath(sql: string): string =
-  let h = hashSql(sql)
-  var filename = ""
-  filename.addHex32(h.a)
-  filename.addHex32(h.b)
-  filename.add ".dkc"
-  result = cacheQueriesDir() / filename
+  result = cacheQueriesDir() / cacheFileName(sql)
 
 proc addU8(data: var string; value: uint8) =
   data.add char(int(value))
@@ -86,7 +83,7 @@ proc addString(data: var string; value: string) =
 proc needBytes(state: var DecodeState; count: int): bool =
   if state.error.len > 0:
     return false
-  if count < 0 or state.pos + count > state.data.len:
+  if state.pos + count > state.data.len:
     state.error = "cache file is truncated"
     return false
   result = true
@@ -117,11 +114,8 @@ proc readString(state: var DecodeState): string =
   state.pos += n
 
 proc encodeCache(sql: string; columns: seq[ColumnMeta]; params: int): string =
-  let h = hashSql(sql)
   result = CacheMagic
   result.addU32 CacheVersion
-  result.addU32 h.a
-  result.addU32 h.b
   result.addString sql
   result.addU32 uint32(params)
   result.addU32 uint32(columns.len)
@@ -151,13 +145,6 @@ proc decodeCache(data: string; expectedSql: string):
     result.error = "unsupported cache version " & $version & " (expected " & $CacheVersion & ")"
     return
 
-  let expectedHash = hashSql(expectedSql)
-  let hashA = state.readU32()
-  let hashB = state.readU32()
-  if hashA != expectedHash.a or hashB != expectedHash.b:
-    result.error = "cache hash does not match SQL"
-    return
-
   let cachedSql = state.readString()
   if cachedSql != expectedSql:
     result.error = "cache SQL does not match query text"
@@ -165,9 +152,6 @@ proc decodeCache(data: string; expectedSql: string):
 
   result.params = int(state.readU32())
   let columnCount = int(state.readU32())
-  if columnCount < 0:
-    result.error = "cache has invalid column count"
-    return
 
   for _ in 0..<columnCount:
     let name = state.readString()
