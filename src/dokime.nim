@@ -4,35 +4,56 @@
 ##   import dokime
 ##   var db = openDatabase("mydb.sqlite")
 ##   let row = query(db, "SELECT id, name FROM users WHERE id = ?", 42'i64)
-##   echo row.id  # int64
-##   echo row.name  # string
+##   echo row.id     # int64
+##   echo row.name   # string
 
 import std/opt
 import dokime/private/runtime
 
 export opt, runtime
 
-## Compile-time validated SQL query that requires at least one row.
-##
-## The SQL string is validated against your database at compile time.
-## Set DOKIME_DATABASE_PATH to point to your development database.
-##
-## Example: query(db, "SELECT id, name FROM users WHERE id = ?", userId)
 template query*(): untyped {.varargs, plugin: "dokime/private/plugins/queryone".}
+  ## Compile-time validated SQL query that returns exactly one row.
+  ##
+  ## The SQL string is checked against your development database at compile time.
+  ## Set `DOKIME_DATABASE_PATH` to point to that database.
+  ##
+  ## ```nim
+  ## let row = query(db, "SELECT id, name FROM users WHERE id = ?", userId)
+  ## echo row.id
+  ## ```
 
-## Compile-time validated SQL query that requires at least one row.
 template queryOne*(): untyped {.varargs, plugin: "dokime/private/plugins/queryone".}
+  ## Alias for `query`.
 
-## Compile-time validated SQL query that returns Opt[row].
-##
-## Use for row-returning SQL where no row is an expected result.
 template queryOpt*(): untyped {.varargs, plugin: "dokime/private/plugins/queryopt".}
+  ## Compile-time validated SQL query that may return zero rows.
+  ##
+  ## Returns `Opt[tuple[...]]`.  Use when the absence of a matching row is
+  ## expected and should not raise an error.
+  ##
+  ## ```nim
+  ## let maybe = queryOpt(db, "SELECT name FROM users WHERE id = ?", uid)
+  ## if maybe.isSome:
+  ##   echo maybe.get.name
+  ## ```
 
-## Compile-time validated SQL query that streams all returned rows.
 template rows*(): untyped {.varargs, plugin: "dokime/private/plugins/rows".}
+  ## Compile-time validated SQL query that returns all matching rows.
+  ##
+  ## Returns a value that can be iterated with `for`:
+  ##
+  ## ```nim
+  ## for row in rows(db, "SELECT id, name FROM users"):
+  ##   echo row.id, " ", row.name
+  ## ```
 
-## Compile-time validated SQL command that returns execution metadata.
-##
-## Use for SQL that returns no result columns, such as INSERT, UPDATE, DELETE,
-## DDL, BEGIN, COMMIT, and ROLLBACK.
 template exec*(): untyped {.varargs, plugin: "dokime/private/plugins/exec".}
+  ## Compile-time validated SQL command with no result columns.
+  ##
+  ## Use for INSERT, UPDATE, DELETE, DDL, BEGIN, COMMIT, and ROLLBACK.
+  ## Returns the row count as `int64`.
+  ##
+  ## ```nim
+  ## let affected = exec(db, "UPDATE users SET active = 1 WHERE id = ?", uid)
+  ## ```
