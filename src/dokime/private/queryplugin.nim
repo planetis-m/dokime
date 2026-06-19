@@ -141,17 +141,8 @@ proc inferNullable(db: sqlite3.DbConn; stmt: sqlite3.Stmt; col: int): bool =
     notNull: cint = 0
     primaryKey: cint = 0
     autoInc: cint = 0
-  let rc = sqlite3_table_column_metadata(
-    db,
-    nil,
-    tableName,
-    originName,
-    nil,
-    nil,
-    notNull,
-    primaryKey,
-    autoInc
-  )
+  let rc = sqlite3_table_column_metadata(db, nil, tableName, originName,
+      nil, nil, notNull, primaryKey, autoInc)
   if rc != SQLITE_OK:
     result = true
   else:
@@ -168,25 +159,14 @@ proc validateSql(sql: string): tuple[columns: seq[ColumnMeta], params: int, erro
     errMsg = "DOKIME_DATABASE_PATH not set"
   else:
     var db: sqlite3.DbConn = nil
-    let rc = sqlite3_open_v2(
-      toCString(dbPath),
-      db,
-      SQLITE_OPEN_READWRITE,
-      nil
-    )
+    let rc = sqlite3_open_v2(toCString(dbPath), db, SQLITE_OPEN_READWRITE, nil)
     if rc != SQLITE_OK:
       let msg = if db != nil: fromCString(sqlite3_errmsg(db)) else: "open failed"
       errMsg = "cannot open database: " & msg
     else:
       var stmt: sqlite3.Stmt = nil
       var s = sql
-      let prepRc = sqlite3_prepare_v2(
-        db,
-        toCString(s),
-        sql.len.cint,
-        stmt,
-        nil
-      )
+      let prepRc = sqlite3_prepare_v2(db, toCString(s), sql.len.cint, stmt, nil)
       if prepRc != SQLITE_OK:
         errMsg = fromCString(sqlite3_errmsg(db))
       else:

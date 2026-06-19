@@ -60,12 +60,7 @@ proc checkSqlite(rc: cint) {.raises.} =
 
 proc openDatabaseCString(path: cstring): sqlite3.DbConn {.raises.} =
   var db: sqlite3.DbConn = nil
-  let rc = sqlite3_open_v2(
-    path,
-    db,
-    cint(SQLITE_OPEN_READWRITE or SQLITE_OPEN_CREATE),
-    nil
-  )
+  let rc = sqlite3_open_v2(path, db, cint(SQLITE_OPEN_READWRITE or SQLITE_OPEN_CREATE), nil)
   if rc != SQLITE_OK:
     if db != nil:
       discard sqlite3_close_v2(db)
@@ -78,11 +73,8 @@ proc openDatabase*(path: sink string): sqlite3.DbConn {.raises.} =
 proc closeDatabase*(db: sqlite3.DbConn) {.raises.} =
   checkSqlite(sqlite3_close_v2(db))
 
-proc prepareStmtBytes(
-  db: sqlite3.DbConn;
-  sql: cstring;
-  sqlLen: int
-): sqlite3.Stmt {.raises.} =
+proc prepareStmtBytes(db: sqlite3.DbConn; sql: cstring;
+    sqlLen: int): sqlite3.Stmt {.raises.} =
   var stmt: sqlite3.Stmt = nil
   let rc = sqlite3_prepare_v2(db, sql, sqlLen.cint, stmt, nil)
   checkSqlite(rc)
@@ -117,13 +109,8 @@ proc bindInt64(stmt: sqlite3.Stmt; idx: int; value: int64) {.raises.} =
 
 proc bindText(stmt: sqlite3.Stmt; idx: int; value: string) {.raises.} =
   var v = value
-  checkSqlite(sqlite3_bind_text(
-    stmt,
-    idx.cint,
-    toCString(v),
-    value.len.cint,
-    sqliteTransient()
-  ))
+  checkSqlite(sqlite3_bind_text(stmt, idx.cint, toCString(v),
+      value.len.cint, sqliteTransient()))
 
 proc bindFloat64(stmt: sqlite3.Stmt; idx: int; value: float64) {.raises.} =
   checkSqlite(sqlite3_bind_double(stmt, idx.cint, value))

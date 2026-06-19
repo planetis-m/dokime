@@ -71,119 +71,76 @@ const
 
 # ---- Connection management ----
 
-proc sqlite3_open_v2*(
-  filename: cstring,
-  ppDb: var DbConn,
-  flags: cint,
-  zVfs: nil cstring
-): cint {.sql, importc: "sqlite3_open_v2".}
+proc sqlite3_open_v2*(filename: cstring; ppDb: var DbConn; flags: cint;
+    zVfs: nil cstring): cint {.sql, importc: "sqlite3_open_v2".}
 
-proc sqlite3_close_v2*(db: DbConn): cint {.
-  sql, importc: "sqlite3_close_v2".}
+proc sqlite3_close_v2*(db: DbConn): cint {.sql, importc: "sqlite3_close_v2".}
 
-proc sqlite3_errmsg*(db: DbConn): nil cstring {.
-  sql, importc: "sqlite3_errmsg".}
+proc sqlite3_errmsg*(db: DbConn): nil cstring {.sql, importc: "sqlite3_errmsg".}
 
 # ---- Simple execution (DDL, no params) ----
 
-proc sqlite3_exec*(
-  db: DbConn,
-  sql: cstring,
-  callback: nil pointer,
-  callbackArg: nil pointer,
-  errmsg: nil ptr cstring
-): cint {.sql, importc: "sqlite3_exec".}
+proc sqlite3_exec*(db: DbConn; sql: cstring; callback: nil pointer;
+    callbackArg: nil pointer; errmsg: nil ptr cstring): cint {.sql,
+    importc: "sqlite3_exec".}
 
 # ---- Prepared statements ----
 
-proc sqlite3_prepare_v2*(
-  db: DbConn,
-  zSql: cstring,
-  nByte: cint,
-  ppStmt: var Stmt,
-  pzTail: nil ptr cstring
-): cint {.sql, importc: "sqlite3_prepare_v2".}
+proc sqlite3_prepare_v2*(db: DbConn; zSql: cstring; nByte: cint;
+    ppStmt: var Stmt; pzTail: nil ptr cstring): cint {.sql, importc: "sqlite3_prepare_v2".}
 
-proc sqlite3_step*(s: Stmt): cint {.
-  sql, importc: "sqlite3_step".}
+proc sqlite3_step*(s: Stmt): cint {.sql, importc: "sqlite3_step".}
 
-proc sqlite3_finalize*(s: Stmt): cint {.
-  sql, importc: "sqlite3_finalize".}
+proc sqlite3_finalize*(s: Stmt): cint {.sql, importc: "sqlite3_finalize".}
 
-proc sqlite3_reset*(s: Stmt): cint {.
-  sql, importc: "sqlite3_reset".}
+proc sqlite3_reset*(s: Stmt): cint {.sql, importc: "sqlite3_reset".}
 
-proc sqlite3_stmt_readonly*(s: Stmt): cint {.
-  sql, importc: "sqlite3_stmt_readonly".}
+proc sqlite3_stmt_readonly*(s: Stmt): cint {.sql, importc: "sqlite3_stmt_readonly".}
 
 # ---- Parameter binding ----
 
-proc sqlite3_bind_parameter_count*(s: Stmt): cint {.
-  sql, importc: "sqlite3_bind_parameter_count".}
+proc sqlite3_bind_parameter_count*(s: Stmt): cint {.sql, importc: "sqlite3_bind_parameter_count".}
 
-proc sqlite3_bind_int64*(s: Stmt, idx: cint, value: int64): cint {.
-  sql, importc: "sqlite3_bind_int64".}
+proc sqlite3_bind_int64*(s: Stmt, idx: cint, value: int64): cint {.sql, importc: "sqlite3_bind_int64".}
 
-proc sqlite3_bind_text*(
-  s: Stmt, idx: cint,
-  text: cstring, n: cint,
-  destructor: nil pointer
-): cint {.sql, importc: "sqlite3_bind_text".}
+proc sqlite3_bind_text*(s: Stmt, idx: cint, text: cstring, n: cint,
+    destructor: nil pointer): cint {.sql, importc: "sqlite3_bind_text".}
 
-proc sqlite3_bind_double*(s: Stmt, idx: cint, value: float64): cint {.
-  sql, importc: "sqlite3_bind_double".}
+proc sqlite3_bind_double*(s: Stmt, idx: cint, value: float64): cint {.sql, importc: "sqlite3_bind_double".}
 
-proc sqlite3_bind_null*(s: Stmt, idx: cint): cint {.
-  sql, importc: "sqlite3_bind_null".}
+proc sqlite3_bind_null*(s: Stmt, idx: cint): cint {.sql, importc: "sqlite3_bind_null".}
 
 # ---- Column metadata ----
 
-proc sqlite3_column_count*(s: Stmt): cint {.
-  sql, importc: "sqlite3_column_count".}
+proc sqlite3_column_count*(s: Stmt): cint {.sql, importc: "sqlite3_column_count".}
 
-proc sqlite3_column_type*(s: Stmt, col: cint): cint {.
-  sql, importc: "sqlite3_column_type".}
+proc sqlite3_column_type*(s: Stmt, col: cint): cint {.sql, importc: "sqlite3_column_type".}
 
-proc sqlite3_column_name*(s: Stmt, col: cint): nil cstring {.
-  sql, importc: "sqlite3_column_name".}
+proc sqlite3_column_name*(s: Stmt, col: cint): nil cstring {.sql, importc: "sqlite3_column_name".}
 
-proc sqlite3_column_decltype*(s: Stmt, col: cint): nil cstring {.
-  sql, importc: "sqlite3_column_decltype".}
+proc sqlite3_column_decltype*(s: Stmt, col: cint): nil cstring {.sql, importc: "sqlite3_column_decltype".}
 
-proc sqlite3_column_database_name*(s: Stmt, col: cint): nil cstring {.
-  sql, importc: "sqlite3_column_database_name".}
+proc sqlite3_column_database_name*(s: Stmt, col: cint): nil cstring {.sql,
+    importc: "sqlite3_column_database_name".}
 
-proc sqlite3_column_table_name*(s: Stmt, col: cint): nil cstring {.
-  sql, importc: "sqlite3_column_table_name".}
+proc sqlite3_column_table_name*(s: Stmt, col: cint): nil cstring {.sql, importc: "sqlite3_column_table_name".}
 
-proc sqlite3_column_origin_name*(s: Stmt, col: cint): nil cstring {.
-  sql, importc: "sqlite3_column_origin_name".}
+proc sqlite3_column_origin_name*(s: Stmt, col: cint): nil cstring {.sql,
+    importc: "sqlite3_column_origin_name".}
 
-proc sqlite3_table_column_metadata*(
-  db: DbConn,
-  dbName: nil cstring,
-  tableName: cstring,
-  columnName: cstring,
-  dataType: nil ptr cstring,
-  collSeq: nil ptr cstring,
-  notNull: var cint,
-  primaryKey: var cint,
-  autoInc: var cint
-): cint {.sql, importc: "sqlite3_table_column_metadata".}
+proc sqlite3_table_column_metadata*(db: DbConn; dbName: nil cstring;
+    tableName: cstring; columnName: cstring; dataType: nil ptr cstring;
+    collSeq: nil ptr cstring; notNull: var cint; primaryKey: var cint;
+    autoInc: var cint): cint {.sql, importc: "sqlite3_table_column_metadata".}
 
-proc sqlite3_column_int64*(s: Stmt, col: cint): int64 {.
-  sql, importc: "sqlite3_column_int64".}
+proc sqlite3_column_int64*(s: Stmt, col: cint): int64 {.sql, importc: "sqlite3_column_int64".}
 
-proc sqlite3_column_text*(s: Stmt, col: cint): nil cstring {.
-  sql, importc: "sqlite3_column_text".}
+proc sqlite3_column_text*(s: Stmt, col: cint): nil cstring {.sql, importc: "sqlite3_column_text".}
 
-proc sqlite3_column_double*(s: Stmt, col: cint): float64 {.
-  sql, importc: "sqlite3_column_double".}
+proc sqlite3_column_double*(s: Stmt, col: cint): float64 {.sql, importc: "sqlite3_column_double".}
 
 # ---- Misc ----
 
-proc sqlite3_changes*(db: DbConn): cint {.
-  sql, importc: "sqlite3_changes".}
+proc sqlite3_changes*(db: DbConn): cint {.sql, importc: "sqlite3_changes".}
 
-proc sqlite3_last_insert_rowid*(db: DbConn): int64 {.
-  sql, importc: "sqlite3_last_insert_rowid".}
+proc sqlite3_last_insert_rowid*(db: DbConn): int64 {.sql, importc: "sqlite3_last_insert_rowid".}
