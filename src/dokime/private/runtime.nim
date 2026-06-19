@@ -95,7 +95,7 @@ proc requireOpenDatabase(db: Database): sqlite3.DbConn {.raises.} =
     raise BadOperation
   result = db.conn
 
-proc requireActiveTransaction(tx: lent Transaction): sqlite3.DbConn {.raises.} =
+proc requireActiveTransaction(tx: Transaction): sqlite3.DbConn {.raises.} =
   if tx.db == nil or tx.db.conn == nil or not tx.active:
     raise BadOperation
   result = tx.db.conn
@@ -118,7 +118,7 @@ proc savepointSql(name: string; keyword: string): string {.raises.} =
     raise ValueError
   result = keyword & " " & name
 
-proc isActive*(tx: lent Transaction): bool {.raises: [].} =
+proc isActive*(tx: Transaction): bool {.raises: [].} =
   result = tx.db != nil and tx.db.conn != nil and tx.active
 
 proc databaseHandle(db: sqlite3.DbConn): sqlite3.DbConn {.raises: [].} =
@@ -127,7 +127,7 @@ proc databaseHandle(db: sqlite3.DbConn): sqlite3.DbConn {.raises: [].} =
 proc databaseHandle(db: Database): sqlite3.DbConn {.raises.} =
   result = requireOpenDatabase(db)
 
-proc databaseHandle(tx: lent Transaction): sqlite3.DbConn {.raises.} =
+proc databaseHandle(tx: Transaction): sqlite3.DbConn {.raises.} =
   result = requireActiveTransaction(tx)
 
 proc openDatabaseCString(path: cstring): sqlite3.DbConn {.raises.} =
@@ -175,15 +175,15 @@ proc rollbackIfActive(tx: var Transaction) {.raises: [].} =
       tx.db.txActive = false
       tx.active = false
 
-proc savepoint*(tx: lent Transaction; name: string) {.raises.} =
+proc savepoint*(tx: Transaction; name: string) {.raises.} =
   var sql = savepointSql(name, "SAVEPOINT")
   execSql(requireActiveTransaction(tx), toCString(sql))
 
-proc releaseSavepoint*(tx: lent Transaction; name: string) {.raises.} =
+proc releaseSavepoint*(tx: Transaction; name: string) {.raises.} =
   var sql = savepointSql(name, "RELEASE SAVEPOINT")
   execSql(requireActiveTransaction(tx), toCString(sql))
 
-proc rollbackTo*(tx: lent Transaction; name: string) {.raises.} =
+proc rollbackTo*(tx: Transaction; name: string) {.raises.} =
   var sql = savepointSql(name, "ROLLBACK TO SAVEPOINT")
   execSql(requireActiveTransaction(tx), toCString(sql))
 
