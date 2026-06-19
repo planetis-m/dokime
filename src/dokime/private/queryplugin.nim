@@ -1,6 +1,6 @@
 ## Shared implementation for dokime query template plugins.
 
-import std/[dirs, envvars, opt, os, syncio]
+import std/[dirs, envvars, hashes, opt, os, syncio]
 import plugins
 import runtime
 import ".." / sqlite3
@@ -41,28 +41,8 @@ type
 proc cacheQueriesDir(): string =
   result = DefaultCacheRoot / "queries"
 
-proc addHexByte(result: var string; value: uint32) =
-  const Hex = "0123456789abcdef"
-  result.add Hex[int((value shr 4) and 0xf'u32)]
-  result.add Hex[int(value and 0xf'u32)]
-
-proc addHex32(result: var string; value: uint32) =
-  result.addHexByte((value shr 24) and 0xff'u32)
-  result.addHexByte((value shr 16) and 0xff'u32)
-  result.addHexByte((value shr 8) and 0xff'u32)
-  result.addHexByte(value and 0xff'u32)
-
 proc cacheFileName(sql: string): string =
-  var
-    hashA = 2166136261'u32
-    hashB = 5381'u32
-  for ch in sql:
-    hashA = (hashA xor uint32(ord(ch))) * 16777619'u32
-    hashB = ((hashB shl 5) + hashB) xor uint32(ord(ch))
-  result = ""
-  result.addHex32(hashA)
-  result.addHex32(hashB)
-  result.add ".dkc"
+  result = $hash(sql) & ".dkc"
 
 proc cacheFilePath(sql: string): string =
   result = cacheQueriesDir() / cacheFileName(sql)
