@@ -11,7 +11,7 @@ type
 template sqliteTransient(): pointer =
   cast[pointer](-1)
 
-proc sqliteErrorCode(rc: cint): ErrorCode =
+proc sqliteErrorCode(rc: cint): ErrorCode {.raises: [].} =
   case rc
   of SQLITE_OK, SQLITE_ROW, SQLITE_DONE:
     result = Success
@@ -71,20 +71,20 @@ template prepareStmt*(db: sqlite3.DbConn; sql: typed; sqlLen: int): sqlite3.Stmt
 proc finalizeStmt*(stmt: sqlite3.Stmt) {.raises.} =
   checkSqlite(sqlite3_finalize(stmt))
 
-proc finalizeStmtCode*(stmt: sqlite3.Stmt): cint =
+proc finalizeStmtCode*(stmt: sqlite3.Stmt): cint {.raises: [].} =
   result = sqlite3_finalize(stmt)
 
 proc stepStmt*(stmt: sqlite3.Stmt): cint {.raises.} =
   result = sqlite3_step(stmt)
   checkSqlite(result)
 
-proc stepStmtCode*(stmt: sqlite3.Stmt): cint =
+proc stepStmtCode*(stmt: sqlite3.Stmt): cint {.raises: [].} =
   result = sqlite3_step(stmt)
 
 proc stepHasRow*(stmt: sqlite3.Stmt): bool {.raises.} =
   result = stepStmt(stmt) == SQLITE_ROW
 
-proc stepReturnedRow*(rc: cint): bool =
+proc stepReturnedRow*(rc: cint): bool {.raises: [].} =
   result = rc == SQLITE_ROW
 
 proc checkFinalizeCode*(rc: cint) {.raises.} =
@@ -124,59 +124,59 @@ proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: string) {.raises.} =
 proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: float64) {.raises.} =
   bindFloat64(stmt, idx, value)
 
-proc columnInt64*(stmt: sqlite3.Stmt; col: int): int64 =
+proc columnInt64*(stmt: sqlite3.Stmt; col: int): int64 {.raises: [].} =
   result = sqlite3_column_int64(stmt, col.cint)
 
-proc columnString*(stmt: sqlite3.Stmt; col: int): string =
+proc columnString*(stmt: sqlite3.Stmt; col: int): string {.raises: [].} =
   let cstr = sqlite3_column_text(stmt, col.cint)
   if cstr != nil:
     result = fromCString(cstr)
   else:
     result = ""
 
-proc columnFloat64*(stmt: sqlite3.Stmt; col: int): float64 =
+proc columnFloat64*(stmt: sqlite3.Stmt; col: int): float64 {.raises: [].} =
   result = sqlite3_column_double(stmt, col.cint)
 
-proc columnOptInt64*(stmt: sqlite3.Stmt; col: int): Opt[int64] =
+proc columnOptInt64*(stmt: sqlite3.Stmt; col: int): Opt[int64] {.raises: [].} =
   if sqlite3_column_type(stmt, col.cint) == SQLITE_NULL:
     result = none[int64]()
   else:
     result = some(columnInt64(stmt, col))
 
-proc columnOptString*(stmt: sqlite3.Stmt; col: int): Opt[string] =
+proc columnOptString*(stmt: sqlite3.Stmt; col: int): Opt[string] {.raises: [].} =
   if sqlite3_column_type(stmt, col.cint) == SQLITE_NULL:
     result = none[string]()
   else:
     result = some(columnString(stmt, col))
 
-proc columnOptFloat64*(stmt: sqlite3.Stmt; col: int): Opt[float64] =
+proc columnOptFloat64*(stmt: sqlite3.Stmt; col: int): Opt[float64] {.raises: [].} =
   if sqlite3_column_type(stmt, col.cint) == SQLITE_NULL:
     result = none[float64]()
   else:
     result = some(columnFloat64(stmt, col))
 
-proc initRows*[T: tuple](stmt: sqlite3.Stmt; rowShape: T): RowSet[T] =
+proc initRows*[T: tuple](stmt: sqlite3.Stmt; rowShape: T): RowSet[T] {.raises: [].} =
   result = RowSet[T](stmt: stmt, rowShape: rowShape)
 
-proc assignColumn(field: var int64; stmt: sqlite3.Stmt; col: int) =
+proc assignColumn(field: var int64; stmt: sqlite3.Stmt; col: int) {.raises: [].} =
   field = columnInt64(stmt, col)
 
-proc assignColumn(field: var string; stmt: sqlite3.Stmt; col: int) =
+proc assignColumn(field: var string; stmt: sqlite3.Stmt; col: int) {.raises: [].} =
   field = columnString(stmt, col)
 
-proc assignColumn(field: var float64; stmt: sqlite3.Stmt; col: int) =
+proc assignColumn(field: var float64; stmt: sqlite3.Stmt; col: int) {.raises: [].} =
   field = columnFloat64(stmt, col)
 
-proc assignColumn(field: var Opt[int64]; stmt: sqlite3.Stmt; col: int) =
+proc assignColumn(field: var Opt[int64]; stmt: sqlite3.Stmt; col: int) {.raises: [].} =
   field = columnOptInt64(stmt, col)
 
-proc assignColumn(field: var Opt[string]; stmt: sqlite3.Stmt; col: int) =
+proc assignColumn(field: var Opt[string]; stmt: sqlite3.Stmt; col: int) {.raises: [].} =
   field = columnOptString(stmt, col)
 
-proc assignColumn(field: var Opt[float64]; stmt: sqlite3.Stmt; col: int) =
+proc assignColumn(field: var Opt[float64]; stmt: sqlite3.Stmt; col: int) {.raises: [].} =
   field = columnOptFloat64(stmt, col)
 
-proc decodeRow[T: tuple](rows: RowSet[T]): T =
+proc decodeRow[T: tuple](rows: RowSet[T]): T {.raises: [].} =
   result = rows.rowShape
   var col = 0
   for _, field in fieldPairs(result):

@@ -15,7 +15,7 @@ import dokime/private/runtime
 export types
 export opt
 
-proc sqliteErrorCode(rc: cint): ErrorCode =
+proc sqliteErrorCode(rc: cint): ErrorCode {.raises: [].} =
   case rc
   of SQLITE_OK, SQLITE_ROW, SQLITE_DONE:
     result = Success
