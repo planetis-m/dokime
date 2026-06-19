@@ -1,11 +1,12 @@
 ## dokime — Compile-time validated SQL for Nimony.
 ##
-## Usage:
-##   import dokime
-##   var db = openDatabase("mydb.sqlite")
-##   let row = query(db, "SELECT id, name FROM users WHERE id = ?", 42'i64)
-##   echo row.id     # int64
-##   echo row.name   # string
+## ```nim
+## import dokime
+## var db = openDatabase("mydb.sqlite")
+## let row = query(db, "SELECT id, name FROM users WHERE id = ?", 42'i64)
+## echo row.id     # int64
+## echo row.name   # string
+## ```
 
 import std/opt
 import dokime/private/runtime
