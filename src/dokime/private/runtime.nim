@@ -71,15 +71,33 @@ template prepareStmt*(db: sqlite3.DbConn; sql: typed; sqlLen: int): sqlite3.Stmt
 proc finalizeStmt*(stmt: sqlite3.Stmt) {.raises.} =
   checkSqlite(sqlite3_finalize(stmt))
 
+proc finalizeStmtCode*(stmt: sqlite3.Stmt): cint =
+  result = sqlite3_finalize(stmt)
+
 proc stepStmt*(stmt: sqlite3.Stmt): cint {.raises.} =
   result = sqlite3_step(stmt)
   checkSqlite(result)
 
+proc stepStmtCode*(stmt: sqlite3.Stmt): cint =
+  result = sqlite3_step(stmt)
+
 proc stepHasRow*(stmt: sqlite3.Stmt): bool {.raises.} =
   result = stepStmt(stmt) == SQLITE_ROW
 
-proc stmtReadOnly(stmt: sqlite3.Stmt): bool =
-  result = sqlite3_stmt_readonly(stmt) != 0
+proc stepReturnedRow*(rc: cint): bool =
+  result = rc == SQLITE_ROW
+
+proc checkFinalizeCode*(rc: cint) {.raises.} =
+  if rc != SQLITE_OK:
+    checkSqlite(rc)
+
+proc checkStepCode*(rc: cint) {.raises.} =
+  if rc != SQLITE_ROW and rc != SQLITE_DONE:
+    checkSqlite(rc)
+
+proc requireStepRow*(rc: cint) {.raises.} =
+  if rc != SQLITE_ROW:
+    raise BadOperation
 
 proc bindInt64(stmt: sqlite3.Stmt; idx: int; value: int64) {.raises.} =
   checkSqlite(sqlite3_bind_int64(stmt, idx.cint, value))
@@ -172,18 +190,9 @@ iterator items*[T: tuple](rows: RowSet[T]): T {.sideEffect, raises.} =
   finally:
     finalizeStmt(rows.stmt)
 
-proc missingRow*[T](row: T): T {.raises.} =
-  raise BadOperation
-
-proc lastInsertRowid(db: sqlite3.DbConn): int64 =
-  result = sqlite3_last_insert_rowid(db)
-
-proc changes(db: sqlite3.DbConn): int64 =
-  result = sqlite3_changes(db).int64
-
 proc execStmt*(db: sqlite3.DbConn; stmt: sqlite3.Stmt): SqlExecResult {.raises.} =
   result = SqlExecResult(changes: 0, lastInsertRowid: 0)
-  let readOnly = stmtReadOnly(stmt)
+  let readOnly = sqlite3_stmt_readonly(stmt) != 0
   var resultChanges: int64 = 0
   var resultLastInsertRowid: int64 = 0
   try:
@@ -191,8 +200,8 @@ proc execStmt*(db: sqlite3.DbConn; stmt: sqlite3.Stmt): SqlExecResult {.raises.}
     if readOnly:
       resultChanges = 0
     else:
-      resultChanges = changes(db)
-    resultLastInsertRowid = lastInsertRowid(db)
+      resultChanges = sqlite3_changes(db).int64
+    resultLastInsertRowid = sqlite3_last_insert_rowid(db)
   finally:
     finalizeStmt(stmt)
   result = SqlExecResult(

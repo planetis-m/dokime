@@ -14,7 +14,6 @@ type
 
   ColumnMeta = object
     name: string
-    declaredType: string
     kind: ColumnKind
     nullable: bool
 
@@ -128,35 +127,47 @@ proc addPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
       t.addIntLit(i + 1)
       t.addSubtree(paramCursor)
 
-proc addFinalize(t: var NifBuilder) =
-  t.withTree(CallX, NoLineInfo):
-    t.bindSym("finalizeStmt")
-    t.addIdent("__dokime_stmt")
+proc addStepCode(t: var NifBuilder) =
+  t.withTree(VarS, NoLineInfo):
+    t.addIdent("__dokime_step")
+    t.addEmptyNode3()
+    t.withTree(CallX, NoLineInfo):
+      t.bindSym("stepStmtCode")
+      t.addIdent("__dokime_stmt")
 
-proc addRowResult(t: var NifBuilder; columns: seq[ColumnMeta]; mode: QueryMode) =
-  case mode
-  of qmOne:
-    t.addIdent("__dokime_row")
-  of qmOpt:
+proc addFinalizeCode(t: var NifBuilder) =
+  t.withTree(VarS, NoLineInfo):
+    t.addIdent("__dokime_finalize")
+    t.addEmptyNode3()
+    t.withTree(CallX, NoLineInfo):
+      t.bindSym("finalizeStmtCode")
+      t.addIdent("__dokime_stmt")
+
+proc addStatusChecks(t: var NifBuilder) =
+  t.withTree(CallX, NoLineInfo):
+    t.bindSym("checkFinalizeCode")
+    t.addIdent("__dokime_finalize")
+  t.withTree(CallX, NoLineInfo):
+    t.bindSym("checkStepCode")
+    t.addIdent("__dokime_step")
+
+proc addInitialRowResult(t: var NifBuilder; columns: seq[ColumnMeta]) =
+  t.withTree(CallX, NoLineInfo):
+    t.withTree(AtX, NoLineInfo):
+      t.bindSym("none")
+      t.addRowType(columns)
+
+proc addAssignOptRowResult(t: var NifBuilder) =
+  t.withTree(AsgnS, NoLineInfo):
+    t.addIdent("__dokime_result")
     t.withTree(CallX, NoLineInfo):
       t.bindSym("some")
       t.addIdent("__dokime_row")
-  of qmRows:
-    discard
 
-proc addNoRowResult(t: var NifBuilder; columns: seq[ColumnMeta]; mode: QueryMode) =
-  case mode
-  of qmOne:
-    t.withTree(CallX, NoLineInfo):
-      t.bindSym("missingRow")
-      t.addIdent("__dokime_row")
-  of qmOpt:
-    t.withTree(CallX, NoLineInfo):
-      t.withTree(AtX, NoLineInfo):
-        t.bindSym("none")
-        t.addRowType(columns)
-  of qmRows:
-    discard
+proc addRequireRow(t: var NifBuilder) =
+  t.withTree(CallX, NoLineInfo):
+    t.bindSym("requireStepRow")
+    t.addIdent("__dokime_step")
 
 proc inferNullable(db: sqlite3.DbConn; stmt: sqlite3.Stmt; col: int): bool =
   let tableName = sqlite3_column_table_name(stmt, col.cint)
@@ -227,7 +238,6 @@ proc validateSql(sql: string): tuple[columns: seq[ColumnMeta], params: int, erro
           let typeStr = if decltype != nil: fromCString(decltype) else: ""
           columns.add ColumnMeta(
             name: colName,
-            declaredType: typeStr,
             kind: toColumnKind(typeStr),
             nullable: inferNullable(db, stmt, i)
           )
@@ -293,21 +303,32 @@ proc buildRowTree(
           result.addEmptyNode3()
           result.addDefaultRow(columns)
 
+        if mode == qmOpt:
+          result.withTree(VarS, NoLineInfo):
+            result.addIdent("__dokime_result")
+            result.addEmptyNode3()
+            result.addInitialRowResult(columns)
+
+        result.addStepCode()
         result.withTree(IfS, NoLineInfo):
           result.withTree(ElifU, NoLineInfo):
             result.withTree(CallX, NoLineInfo):
-              result.bindSym("stepHasRow")
-              result.addIdent("__dokime_stmt")
+              result.bindSym("stepReturnedRow")
+              result.addIdent("__dokime_step")
             result.withTree(StmtsS, NoLineInfo):
               result.withTree(AsgnS, NoLineInfo):
                 result.addIdent("__dokime_row")
                 result.addDecodedRow(columns)
-              result.addFinalize()
-              result.addRowResult(columns, mode)
-          result.withTree(ElseU, NoLineInfo):
-            result.withTree(StmtsS, NoLineInfo):
-              result.addFinalize()
-              result.addNoRowResult(columns, mode)
+              if mode == qmOpt:
+                result.addAssignOptRowResult()
+
+        result.addFinalizeCode()
+        result.addStatusChecks()
+        if mode == qmOne:
+          result.addRequireRow()
+          result.addIdent("__dokime_row")
+        else:
+          result.addIdent("__dokime_result")
 
 proc buildCommandTree(input: QueryInput): NifBuilder =
   result = createTree()
