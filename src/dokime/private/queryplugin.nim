@@ -140,7 +140,7 @@ proc inferNullable(db: sqlite3.DbConn; stmt: sqlite3.Stmt; col: int): bool =
   if rc != SQLITE_OK:
     result = true
   else:
-    result = not (notNull != 0 or primaryKey != 0)
+    result = notNull == 0 and primaryKey == 0
 
 proc validateSql(sql: string): CacheEntry =
   var dbPath = getEnv("DOKIME_DATABASE_PATH")
