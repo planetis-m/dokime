@@ -127,10 +127,11 @@ proc decodeCache*(data: string; expectedSql: string): CacheEntry =
     )
 
   if state.error.len > 0:
-    return CacheEntry(error: state.error)
-  if state.pos != state.data.len:
-    return CacheEntry(error: "cache file has trailing bytes")
-  result = CacheEntry(columns: columns, params: params)
+    result = CacheEntry(error: state.error)
+  elif state.pos != state.data.len:
+    result = CacheEntry(error: "cache file has trailing bytes")
+  else:
+    result = CacheEntry(columns: columns, params: params)
 
 proc writeCache*(sql: string; columns: seq[ColumnMeta]; params: int) =
   try:
