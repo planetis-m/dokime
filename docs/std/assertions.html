@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html><head><meta><title>assertions</title><style>body { font-family: -apple-system, system-ui, sans-serif; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; line-height: 1.45; }
+h1 { border-bottom: 1px solid #ccc; padding-bottom: .25rem; }
+h2, h3, h4 { margin-top: 1.2rem; }
+a { color: #2e6e44; }
+ul.decls { list-style: none; padding: 0; }
+ul.decls &gt; li { padding: .5rem 0; border-bottom: 1px dashed #eee; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92rem; }
+pre.sig { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92rem; margin: 0; white-space: pre-wrap; }
+.kw { color: #0a55a4; font-weight: 600; }
+.name { color: #1a1a1a; font-weight: 600; }
+.op { color: #555; }
+.prim { color: #6a3a8c; }
+.typeref { color: #2e6e44; text-decoration: none; }
+.typeref:hover { text-decoration: underline; }
+.doc { margin: .35rem 0 0 1.2rem; color: #333; }
+.doc p { margin: .25rem 0; }
+.doc ul { margin: .25rem 0 .25rem 1.2rem; padding: 0; }
+.doc table { border-collapse: collapse; margin: .35rem 0; }
+.doc th, .doc td { border: 1px solid #ccc; padding: .15rem .5rem; }
+.moduledoc { margin: 0 0 1rem 0; padding: .25rem .8rem; border-left: 3px solid #888; background: #fafafa; }
+pre.code { background: #f4f4f4; padding: .5rem .8rem; overflow-x: auto; border-radius: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85rem; }
+pre.code .kw { color: #0a55a4; font-weight: 600; }
+pre.code .str { color: #b06000; }
+pre.code .num { color: #6a3a8c; }
+pre.code .com { color: #777; font-style: italic; }
+pre.code .esc { color: #b06000; font-weight: 600; }
+</style></head><body><h1>assertions</h1><p><small>../nimony/lib/std/assertions.nim</small></p><ul class="decls"><li id="assert.0.assy765wm"><code><span class="kw">template</span> <span class="name">assert</span><span class="op">(</span>cond<span class="op">: </span><a class="typeref" href="system.html#bool.0.sysvq0asl">bool</a><span class="op">; </span>msg<span class="op">: </span><a class="typeref" href="system.html#string.0.sysvq0asl">string</a><span class="op">)</span></code></li><li id="raiseAssert.0.assy765wm"><code><span class="kw">proc</span> <span class="name">raiseAssert</span><span class="op">(</span>msg<span class="op">: </span><a class="typeref" href="system.html#string.0.sysvq0asl">string</a><span class="op">)</span></code></li><li id="assertRc.0.assy765wm"><code><span class="kw">template</span> <span class="name">assertRc</span><span class="op">(</span>r<span class="op">: </span><span class="kw">ref</span> <a class="typeref" href="#T.0.assy765wm">T</a> <span class="name">not</span> <span class="kw">nil</span><span class="op">; </span>expected<span class="op">: </span><span class="name">int64</span><span class="op">; </span>tag<span class="op">: </span><a class="typeref" href="system.html#string.0.sysvq0asl">string</a><span class="op">)</span></code><div class="doc"><p>Diagnostic for ref-count tracking. <code>r</code> is a <code>ref T</code>, internally a pointer to <code>{rc: int, d: T}</code> (see <code>arc.nim</code>); reads the rc field at offset 0 and aborts when it differs from <code>expected</code>. <code>arcDec</code> returns true when rc goes negative, so a fresh ref has rc=0 (= 1 logical reference); each <code>=dup</code> adds +1, each <code>=destroy</code> adds -1. Use <code>assertRc(myRef, 0)</code> after construction or <code>assertRc(myRef, n)</code> after n duplications to catch over- or under-counting before the symptom (UAF, double-free, leak) drifts far from the cause.</p></div></li><li id="assertRcAlive.0.assy765wm"><code><span class="kw">template</span> <span class="name">assertRcAlive</span><span class="op">(</span>r<span class="op">: </span><span class="kw">ref</span> <a class="typeref" href="#T.1.assy765wm">T</a> <span class="name">not</span> <span class="kw">nil</span><span class="op">; </span>tag<span class="op">: </span><a class="typeref" href="system.html#string.0.sysvq0asl">string</a><span class="op">)</span></code><div class="doc"><p>Looser assertRc: only fail when rc has already gone negative (i.e. the block has been freed and we're walking dangling memory). Useful when the exact rc varies with =dup/=destroy interleaving but you still want to catch use-after-free quickly. Also rejects bogus pointers (large absolute rc) since arcDec'd-into-positive-billions still indicates the block was reused for an unrelated allocation.</p></div></li></ul></body></html>
