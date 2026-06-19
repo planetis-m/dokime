@@ -193,7 +193,6 @@ schema nullability. Expressions and unknown origins are treated as nullable.
 | `beginTransaction(db)` → `Transaction`    | Start a SQLite transaction           |
 | `commit(tx)`                              | Commit an active transaction         |
 | `rollback(tx)`                            | Roll back an active transaction      |
-| `rollbackIfActive(tx)`                    | No-raise manual cleanup guard        |
 | `savepoint(tx, name)`                     | Create a transaction savepoint       |
 | `rollbackTo(tx, name)`                    | Roll back to a savepoint             |
 | `releaseSavepoint(tx, name)`              | Release a savepoint                  |

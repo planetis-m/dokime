@@ -36,24 +36,20 @@ proc main() {.raises.} =
     assert row.name == "Ada"
     commit(tx)
     assert not tx.isActive
-    assert db.isOpen
     let committed = query(db, "SELECT name FROM users WHERE id = ?", 1'i64)
     assert committed.name == "Ada"
 
   block explicit_rollback_discards:
     var tx = beginTransaction(db)
     discard exec(tx, "INSERT INTO users VALUES (?, ?, ?)", 2'i64, "Grace", 40'i64)
-    assert db.hasActiveTransaction
     assertDatabaseBlocked(db)
     rollback(tx)
-    assert not db.hasActiveTransaction
     assertMissing(db, 2'i64)
 
   block destructor_rollback_discards:
     block:
       var tx = beginTransaction(db)
       discard exec(tx, "INSERT INTO users VALUES (?, ?, ?)", 3'i64, "Lin", 29'i64)
-    assert not db.hasActiveTransaction
     assertMissing(db, 3'i64)
 
   block savepoint_rollback:

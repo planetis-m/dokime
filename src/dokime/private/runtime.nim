@@ -118,12 +118,6 @@ proc savepointSql(name: string; keyword: string): string {.raises.} =
     raise ValueError
   result = keyword & " " & name
 
-proc isOpen*(db: Database): bool {.raises: [].} =
-  result = db != nil and db.conn != nil
-
-proc hasActiveTransaction*(db: Database): bool {.raises: [].} =
-  result = db != nil and db.txActive
-
 proc isActive*(tx: lent Transaction): bool {.raises: [].} =
   result = tx.db != nil and tx.db.conn != nil and tx.active
 
@@ -144,9 +138,6 @@ proc openDatabaseCString(path: cstring): sqlite3.DbConn {.raises.} =
       discard sqlite3_close_v2(db)
     checkSqlite(rc)
   result = db
-
-proc openRawDatabase*(path: sink string): sqlite3.DbConn {.raises.} =
-  result = openDatabaseCString(toCString(path))
 
 proc openDatabase*(path: sink string): Database {.raises.} =
   result = Database(conn: openDatabaseCString(toCString(path)), txActive: false)
@@ -177,7 +168,7 @@ proc rollback*(tx: var Transaction) {.raises.} =
   tx.db.txActive = false
   tx.active = false
 
-proc rollbackIfActive*(tx: var Transaction) {.raises: [].} =
+proc rollbackIfActive(tx: var Transaction) {.raises: [].} =
   if tx.db != nil and tx.db.conn != nil and tx.active:
     let rc = sqlite3_exec(tx.db.conn, cstring("ROLLBACK"), nil, nil, nil)
     if rc == SQLITE_OK:
