@@ -83,7 +83,7 @@ proc openDatabase*(path: sink string): sqlite3.DbConn {.raises.} =
 proc closeDatabase*(db: sqlite3.DbConn) {.raises.} =
   checkSqlite(sqlite3_close_v2(db))
 
-## Compile-time validated SQL query.
+## Compile-time validated SQL query that requires at least one row.
 ##
 ## The SQL string is validated against your database at compile time.
 ## Set DOKIME_DATABASE_PATH to point to your development database.
@@ -92,8 +92,6 @@ proc closeDatabase*(db: sqlite3.DbConn) {.raises.} =
 template query*(): untyped {.varargs, plugin: "dokimeplugin".}
 
 ## Compile-time validated SQL query that requires at least one row.
-##
-## Equivalent to row-returning `query`; command SQL still returns SqlExecResult.
 template queryOne*(): untyped {.varargs, plugin: "dokimeplugin".}
 
 ## Compile-time validated SQL query that returns Opt[row].
@@ -103,3 +101,9 @@ template queryOpt*(): untyped {.varargs, plugin: "dokimeoptplugin".}
 
 ## Compile-time validated SQL query that streams all returned rows.
 template rows*(): untyped {.varargs, plugin: "dokimerowsplugin".}
+
+## Compile-time validated SQL command that returns execution metadata.
+##
+## Use for SQL that returns no result columns, such as INSERT, UPDATE, DELETE,
+## DDL, BEGIN, COMMIT, and ROLLBACK.
+template exec*(): untyped {.varargs, plugin: "dokimeexecplugin".}

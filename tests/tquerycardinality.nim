@@ -24,9 +24,9 @@ proc expectMissingRaises(db: sqlite3.DbConn) {.raises.} =
 
 proc main() {.raises.} =
   let db = openDatabase("tests/tquerycardinality.db")
-  discard query(db, "DROP TABLE IF EXISTS users")
-  discard query(db, "CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT")
-  discard query(db, "INSERT INTO users VALUES (?, ?, ?)", 1'i64, "Alice", 30'i64)
+  discard exec(db, "DROP TABLE IF EXISTS users")
+  discard exec(db, "CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT")
+  discard exec(db, "INSERT INTO users VALUES (?, ?, ?)", 1'i64, "Alice", 30'i64)
 
   let existing = queryOpt(db, "SELECT id, name FROM users WHERE id = ?", 1'i64)
   assert existing.isSome

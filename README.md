@@ -1,8 +1,9 @@
 # dokime — SQL that won't compile if it's wrong
 
-Every SQL string you pass to `query()` is validated against your real database
-**during compilation**. If the table doesn't exist, a column is misspelled, or
-the syntax is broken, you get a compile error — not a runtime crash.
+Every SQL string you pass to `query()`, `queryOpt()`, `rows()`, or `exec()` is
+validated against your real database **during compilation**. If the table
+doesn't exist, a column is misspelled, or the syntax is broken, you get a
+compile error — not a runtime crash.
 
 ```nim
 import dokime
@@ -25,9 +26,9 @@ if maybeRow.isNone:
   schema — no manual type definitions, no drift between code and schema.
 - **Named tuple fields.** `row.id` and `row.name` come directly from the
   SQL column names. No positional indexing.
-- **One SQL surface.** `query()` handles row-returning SQL and command SQL.
-  `INSERT`, `UPDATE`, `DELETE`, DDL, transactions, and maintenance commands
-  are validated at compile time too.
+- **Separate row and command APIs.** Use `query()` / `queryOpt()` / `rows()`
+  for SQL that returns columns, and `exec()` for `INSERT`, `UPDATE`, `DELETE`,
+  DDL, transactions, and maintenance commands.
 - **Zero-abstraction FFI.** Runtime helpers call libsqlite3 directly.
   No ORM, no query builder, no allocations you didn't ask for.
 
@@ -86,8 +87,8 @@ if maybeRow.isNone:
 
 ## Commands
 
-Statements that do not return columns execute through the same `query()`
-template and return `SqlExecResult`:
+Statements that do not return columns execute through `exec()` and return
+`SqlExecResult`:
 
 ```nim
 import std / syncio
@@ -95,20 +96,24 @@ import dokime
 
 let db = openDatabase("myapp.db")
 
-discard query(db, """
+discard exec(db, """
   CREATE TABLE IF NOT EXISTS counters (
     name  TEXT    NOT NULL,
     value INTEGER NOT NULL DEFAULT 0
   ) STRICT
 """)
 
-let inserted = query(db, "INSERT INTO counters VALUES (?, ?)", "requests", 42'i64)
+let inserted = exec(db, "INSERT INTO counters VALUES (?, ?)", "requests", 42'i64)
 echo inserted.lastInsertRowid
 echo inserted.changes
 
-let updated = query(db, "UPDATE counters SET value = value + ? WHERE name = ?", 1'i64, "requests")
+let updated = exec(db, "UPDATE counters SET value = value + ? WHERE name = ?", 1'i64, "requests")
 echo updated.changes
 ```
+
+`exec()` rejects SQL that returns result columns. Use `query()` or `rows()` for
+`INSERT ... RETURNING`, `UPDATE ... RETURNING`, CTEs, and any other statement
+where SQLite reports result columns.
 
 ## Row Cardinality
 
@@ -160,6 +165,7 @@ schema nullability. Expressions and unknown origins are treated as nullable.
 | `queryOne(db, sql, params...)`            | Required-row spelling for selects    |
 | `queryOpt(db, sql, params...)`            | Optional row as `Opt[row]`           |
 | `rows(db, sql, params...)`                | Streaming row iterator               |
+| `exec(db, sql, params...)`                | Command SQL as `SqlExecResult`       |
 | `openDatabase(path)` → `DbConn`           | Open or create a SQLite database     |
 | `closeDatabase(db)`                       | Close the connection                 |
 | `SqlExecResult.changes` → `int64`         | Rows changed by a command statement  |
@@ -174,7 +180,7 @@ nimony c -r tests/tffi.nim
 # Full integration (compile-time validation + runtime)
 DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/tphase5.nim
 
-# Command statements through query()
+# Command statements through exec()
 DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/texecute.nim
 
 # Required/optional row cardinality
@@ -199,10 +205,11 @@ DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/trows.nim
 
 | File                         | Purpose                                      |
 |------------------------------|----------------------------------------------|
-| `src/dokime.nim`             | Public API and `query` template              |
+| `src/dokime.nim`             | Public API templates                         |
 | `src/dokime/types.nim`       | Public result types                          |
 | `src/dokime/sqlite3.nim`     | SQLite3 FFI bindings (dynlib)                |
 | `src/dokime/private/runtime.nim` | Private runtime used by generated code   |
 | `src/dokimeplugin.nim`       | Compile-time plugin (SQL validation + codegen) |
 | `src/dokimeoptplugin.nim`    | Optional-row query plugin                    |
 | `src/dokimerowsplugin.nim`   | Streaming row query plugin                   |
+| `src/dokimeexecplugin.nim`   | Command execution plugin                     |

@@ -8,7 +8,7 @@ import ".." / sqlite3
 
 type
   QueryMode* = enum
-    qmOne, qmOpt, qmRows
+    qmOne, qmOpt, qmRows, qmExec
 
   ColumnKind = enum ckInteger, ckText, ckReal, ckBlob, ckNull
 
@@ -246,7 +246,18 @@ proc validateSql(sql: string): tuple[columns: seq[ColumnMeta], params: int, erro
 
   result = (columns, params, errMsg)
 
-proc parseQueryInput(inp: NifCursor): QueryInput =
+proc queryModeName(mode: QueryMode): string =
+  case mode
+  of qmOne:
+    "query"
+  of qmOpt:
+    "queryOpt"
+  of qmRows:
+    "rows"
+  of qmExec:
+    "exec"
+
+proc parseQueryInput(inp: NifCursor; mode: QueryMode): QueryInput =
   result = QueryInput(
     dbExpr: inp,
     sql: "",
@@ -278,7 +289,7 @@ proc parseQueryInput(inp: NifCursor): QueryInput =
     inc result.bindCount
 
   if result.error.len == 0 and not result.hasSql:
-    result.error = "dokime: expected query(db, \"SQL\", params...)"
+    result.error = "dokime: expected " & queryModeName(mode) & "(db, \"SQL\", params...)"
     result.errorAt = inp.info
 
 proc buildRowTree(
@@ -329,6 +340,8 @@ proc buildRowTree(
           result.addIdent("__dokime_row")
         else:
           result.addIdent("__dokime_result")
+      of qmExec:
+        discard
 
 proc buildCommandTree(input: QueryInput): NifBuilder =
   result = createTree()
@@ -343,7 +356,7 @@ proc buildCommandTree(input: QueryInput): NifBuilder =
         result.addIdent("__dokime_stmt")
 
 proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
-  let query = parseQueryInput(inp)
+  let query = parseQueryInput(inp, mode)
   if query.error.len > 0:
     result = errorTree(query.error, query.errorAt)
   else:
@@ -355,11 +368,14 @@ proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
         "dokime: expected " & $params & " SQL parameter(s), got " & $query.params.len,
         query.errorAt
       )
-    elif columns.len == 0 and mode == qmOpt:
-      result = errorTree("dokime: queryOpt requires row-returning SQL", query.errorAt)
-    elif columns.len == 0 and mode == qmRows:
-      result = errorTree("dokime: rows requires row-returning SQL", query.errorAt)
-    elif columns.len == 0:
+    elif columns.len == 0 and mode == qmExec:
       result = buildCommandTree(query)
+    elif columns.len == 0:
+      result = errorTree(
+        "dokime: " & queryModeName(mode) & " requires row-returning SQL; use exec for command SQL",
+        query.errorAt
+      )
+    elif mode == qmExec:
+      result = errorTree("dokime: exec requires command SQL with no result columns", query.errorAt)
     else:
       result = buildRowTree(query, columns, mode)

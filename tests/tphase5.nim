@@ -14,13 +14,13 @@ import ".." / "src" / dokime
 proc main() {.raises.} =
   # Set up test database with seed data
   let db = openDatabase("tests/tphase5.db")
-  discard query(db, "DROP TABLE IF EXISTS users")
-  discard query(db, "CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT")
+  discard exec(db, "DROP TABLE IF EXISTS users")
+  discard exec(db, "CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT")
 
-  let insert1 = query(db, "INSERT INTO users VALUES (?, ?, ?)", 1'i64, "Alice", 30'i64)
+  let insert1 = exec(db, "INSERT INTO users VALUES (?, ?, ?)", 1'i64, "Alice", 30'i64)
   assert insert1.changes == 1
 
-  let insert2 = query(db, "INSERT INTO users VALUES (?, ?, ?)", 2'i64, "Bob", 25'i64)
+  let insert2 = exec(db, "INSERT INTO users VALUES (?, ?, ?)", 2'i64, "Bob", 25'i64)
   assert insert2.changes == 1
   closeDatabase(db)
 
