@@ -18,21 +18,21 @@ export opt, runtime
 ## Set DOKIME_DATABASE_PATH to point to your development database.
 ##
 ## Example: query(db, "SELECT id, name FROM users WHERE id = ?", userId)
-template query*(): untyped {.varargs, plugin: "dokimeplugin".}
+template query*(): untyped {.varargs, plugin: "dokime/private/plugins/queryone".}
 
 ## Compile-time validated SQL query that requires at least one row.
-template queryOne*(): untyped {.varargs, plugin: "dokimeplugin".}
+template queryOne*(): untyped {.varargs, plugin: "dokime/private/plugins/queryone".}
 
 ## Compile-time validated SQL query that returns Opt[row].
 ##
 ## Use for row-returning SQL where no row is an expected result.
-template queryOpt*(): untyped {.varargs, plugin: "dokimeoptplugin".}
+template queryOpt*(): untyped {.varargs, plugin: "dokime/private/plugins/queryopt".}
 
 ## Compile-time validated SQL query that streams all returned rows.
-template rows*(): untyped {.varargs, plugin: "dokimerowsplugin".}
+template rows*(): untyped {.varargs, plugin: "dokime/private/plugins/rows".}
 
 ## Compile-time validated SQL command that returns execution metadata.
 ##
 ## Use for SQL that returns no result columns, such as INSERT, UPDATE, DELETE,
 ## DDL, BEGIN, COMMIT, and ROLLBACK.
-template exec*(): untyped {.varargs, plugin: "dokimeexecplugin".}
+template exec*(): untyped {.varargs, plugin: "dokime/private/plugins/exec".}

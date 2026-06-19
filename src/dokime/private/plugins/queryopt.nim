@@ -1,5 +1,5 @@
 import plugins
-import dokime/private/queryplugin
+import ".." / queryplugin
 
 let root = loadPluginInput()
 saveTree generate(root, qmOpt)
