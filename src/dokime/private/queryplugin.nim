@@ -314,19 +314,13 @@ proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
     if cache.error.len > 0:
       result = errorTree("dokime: " & cache.error, query.errorAt)
     elif cache.params != query.params.len:
-      result = errorTree(
-        "dokime: expected " & $cache.params &
-        " SQL parameter(s), got " & $query.params.len,
-        query.errorAt
-      )
+      result = errorTree("dokime: expected " & $cache.params &
+          " SQL parameter(s), got " & $query.params.len, query.errorAt)
     elif cache.columns.len == 0 and mode == qmExec:
       result = buildCommandTree(query)
     elif cache.columns.len == 0:
-      result = errorTree(
-        "dokime: " & $mode &
-        " requires row-returning SQL; use exec for command SQL",
-        query.errorAt
-      )
+      result = errorTree("dokime: " & $mode &
+          " requires row-returning SQL; use exec for command SQL", query.errorAt)
     elif mode == qmExec:
       result = errorTree("dokime: exec requires command SQL with no result columns", query.errorAt)
     else:
