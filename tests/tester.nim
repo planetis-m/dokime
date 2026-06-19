@@ -15,6 +15,7 @@ const Positive = [
   "tquickstart.nim",
   "tphase5.nim",
   "texecute.nim",
+  "ttransactions.nim",
   "tquerycardinality.nim",
   "tnullable.nim",
   "trows.nim"
@@ -23,6 +24,7 @@ const Positive = [
 const Negative = [
   "tbadquery.nim",
   "tbadtable.nim",
+  "ttransactioncopy.nim",
   "ttypemismatch.nim"
 ]
 

@@ -1,4 +1,4 @@
-import std/opt
+import std/[opt, strutils]
 
 import ".." / sqlite3
 
@@ -11,8 +11,35 @@ type
     changes*: int64
     lastInsertRowid*: int64
 
+  DatabaseObj = object
+    conn: sqlite3.DbConn
+    txActive: bool
+
+  Transaction* = object
+    db: Database
+    active: bool
+
+  Database* = ref DatabaseObj
+
 template sqliteTransient(): pointer =
   cast[pointer](-1)
+
+proc `=destroy`(db: DatabaseObj) {.raises: [].} =
+  if db.conn != nil:
+    if db.txActive:
+      discard sqlite3_exec(db.conn, cstring("ROLLBACK"), nil, nil, nil)
+    discard sqlite3_close_v2(db.conn)
+
+proc `=destroy`(tx: Transaction) {.raises: [].} =
+  if tx.db != nil and tx.active and tx.db.conn != nil:
+    discard sqlite3_exec(tx.db.conn, cstring("ROLLBACK"), nil, nil, nil)
+    tx.db.txActive = false
+
+proc `=wasMoved`(tx: var Transaction) {.raises: [].} =
+  tx.db = nil
+  tx.active = false
+
+proc `=copy`(dest: var Transaction; src: Transaction) {.error.}
 
 proc sqliteErrorCode(rc: cint): ErrorCode {.raises: [].} =
   case rc
@@ -58,6 +85,57 @@ proc checkSqlite(rc: cint) {.raises.} =
   if err != Success:
     raise err
 
+proc execSql(db: sqlite3.DbConn; sql: cstring) {.raises.} =
+  checkSqlite(sqlite3_exec(db, sql, nil, nil, nil))
+
+proc requireOpenDatabase(db: Database): sqlite3.DbConn {.raises.} =
+  if db == nil or db.conn == nil:
+    raise BadOperation
+  if db.txActive:
+    raise BadOperation
+  result = db.conn
+
+proc requireActiveTransaction(tx: lent Transaction): sqlite3.DbConn {.raises.} =
+  if tx.db == nil or tx.db.conn == nil or not tx.active:
+    raise BadOperation
+  result = tx.db.conn
+
+proc validSavepointName(name: string): bool {.raises: [].} =
+  if name.len == 0 or name.len > 63:
+    return false
+
+  if name[0] notin IdentStartChars:
+    return false
+
+  for ch in name:
+    if ch notin IdentChars:
+      return false
+
+  result = true
+
+proc savepointSql(name: string; keyword: string): string {.raises.} =
+  if not validSavepointName(name):
+    raise ValueError
+  result = keyword & " " & name
+
+proc isOpen*(db: Database): bool {.raises: [].} =
+  result = db != nil and db.conn != nil
+
+proc hasActiveTransaction*(db: Database): bool {.raises: [].} =
+  result = db != nil and db.txActive
+
+proc isActive*(tx: lent Transaction): bool {.raises: [].} =
+  result = tx.db != nil and tx.db.conn != nil and tx.active
+
+proc databaseHandle(db: sqlite3.DbConn): sqlite3.DbConn {.raises: [].} =
+  result = db
+
+proc databaseHandle(db: Database): sqlite3.DbConn {.raises.} =
+  result = requireOpenDatabase(db)
+
+proc databaseHandle(tx: lent Transaction): sqlite3.DbConn {.raises.} =
+  result = requireActiveTransaction(tx)
+
 proc openDatabaseCString(path: cstring): sqlite3.DbConn {.raises.} =
   var db: sqlite3.DbConn = nil
   let rc = sqlite3_open_v2(path, db, cint(SQLITE_OPEN_READWRITE or SQLITE_OPEN_CREATE), nil)
@@ -67,11 +145,56 @@ proc openDatabaseCString(path: cstring): sqlite3.DbConn {.raises.} =
     checkSqlite(rc)
   result = db
 
-proc openDatabase*(path: sink string): sqlite3.DbConn {.raises.} =
+proc openRawDatabase*(path: sink string): sqlite3.DbConn {.raises.} =
   result = openDatabaseCString(toCString(path))
+
+proc openDatabase*(path: sink string): Database {.raises.} =
+  result = Database(conn: openDatabaseCString(toCString(path)), txActive: false)
 
 proc closeDatabase*(db: sqlite3.DbConn) {.raises.} =
   checkSqlite(sqlite3_close_v2(db))
+
+proc closeDatabase*(db: Database) {.raises.} =
+  let conn = requireOpenDatabase(db)
+  checkSqlite(sqlite3_close_v2(conn))
+  db.conn = nil
+
+proc beginTransaction*(db: Database): Transaction {.raises.} =
+  let conn = requireOpenDatabase(db)
+  execSql(conn, cstring("BEGIN"))
+  db.txActive = true
+  result = Transaction(db: db, active: true)
+
+proc commit*(tx: var Transaction) {.raises.} =
+  let conn = requireActiveTransaction(tx)
+  execSql(conn, cstring("COMMIT"))
+  tx.db.txActive = false
+  tx.active = false
+
+proc rollback*(tx: var Transaction) {.raises.} =
+  let conn = requireActiveTransaction(tx)
+  execSql(conn, cstring("ROLLBACK"))
+  tx.db.txActive = false
+  tx.active = false
+
+proc rollbackIfActive*(tx: var Transaction) {.raises: [].} =
+  if tx.db != nil and tx.db.conn != nil and tx.active:
+    let rc = sqlite3_exec(tx.db.conn, cstring("ROLLBACK"), nil, nil, nil)
+    if rc == SQLITE_OK:
+      tx.db.txActive = false
+      tx.active = false
+
+proc savepoint*(tx: lent Transaction; name: string) {.raises.} =
+  var sql = savepointSql(name, "SAVEPOINT")
+  execSql(requireActiveTransaction(tx), toCString(sql))
+
+proc releaseSavepoint*(tx: lent Transaction; name: string) {.raises.} =
+  var sql = savepointSql(name, "RELEASE SAVEPOINT")
+  execSql(requireActiveTransaction(tx), toCString(sql))
+
+proc rollbackTo*(tx: lent Transaction; name: string) {.raises.} =
+  var sql = savepointSql(name, "ROLLBACK TO SAVEPOINT")
+  execSql(requireActiveTransaction(tx), toCString(sql))
 
 proc prepareStmtBytes(db: sqlite3.DbConn; sql: cstring;
     sqlLen: int): sqlite3.Stmt {.raises.} =
@@ -80,8 +203,8 @@ proc prepareStmtBytes(db: sqlite3.DbConn; sql: cstring;
   checkSqlite(rc)
   result = stmt
 
-template prepareStmt*(db: sqlite3.DbConn; sql: typed; sqlLen: int): sqlite3.Stmt =
-  prepareStmtBytes(db, cstring(sql), sqlLen)
+template prepareStmt*(target: untyped; sql: typed; sqlLen: int): untyped =
+  prepareStmtBytes(databaseHandle(target), cstring(sql), sqlLen)
 
 proc finalizeStmtCode*(stmt: sqlite3.Stmt): cint {.raises: [].} =
   result = sqlite3_finalize(stmt)
@@ -202,7 +325,7 @@ iterator items*[T: tuple](rows: RowSet[T]): T {.sideEffect, raises.} =
     checkStepCode(stepRc)
     checkFinalizeCode(finalizeRc)
 
-proc execStmt*(db: sqlite3.DbConn; stmt: sqlite3.Stmt): SqlExecResult {.raises.} =
+proc execStmtForDb(db: sqlite3.DbConn; stmt: sqlite3.Stmt): SqlExecResult {.raises.} =
   result = SqlExecResult(changes: 0, lastInsertRowid: 0)
   let readOnly = sqlite3_stmt_readonly(stmt) != 0
   let stepRc = stepStmtCode(stmt)
@@ -225,3 +348,6 @@ proc execStmt*(db: sqlite3.DbConn; stmt: sqlite3.Stmt): SqlExecResult {.raises.}
     changes: resultChanges,
     lastInsertRowid: resultLastInsertRowid
   )
+
+template execStmt*(target: untyped; stmt: sqlite3.Stmt): untyped =
+  execStmtForDb(databaseHandle(target), stmt)

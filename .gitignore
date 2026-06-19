@@ -7,3 +7,5 @@ nimcache/
 *.dll
 *.dylib
 *.db
+tests/tester
+tests/tester.exe

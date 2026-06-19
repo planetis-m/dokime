@@ -2,12 +2,11 @@
 
 import std/[assertions, syncio]
 import ".." / "src" / dokime
-import ".." / "src" / "dokime" / sqlite3
 
-proc missingQuery(db: sqlite3.DbConn) {.raises.} =
+proc missingQuery(db: Database) {.raises.} =
   discard query(db, "SELECT id, name FROM users WHERE id = ?", 2'i64)
 
-proc checkMissingRaises(db: sqlite3.DbConn) {.raises.} =
+proc checkMissingRaises(db: Database) {.raises.} =
   var raised = false
   try:
     missingQuery(db)

@@ -116,6 +116,29 @@ SQLite reports no result columns; use `query()` or `rows()` for `INSERT ...
 RETURNING`, `UPDATE ... RETURNING`, CTEs, and any other statement that returns
 columns.
 
+## Transactions
+
+Use `beginTransaction()` to create a transaction handle. The same compile-time
+validated `query()`, `queryOpt()`, `rows()`, and `exec()` templates accept either
+a database connection or an active transaction:
+
+```nim
+var tx = beginTransaction(db)
+discard exec(tx, "INSERT INTO counters VALUES (?, ?)", "jobs", 1'i64)
+let row = query(tx, "SELECT value FROM counters WHERE name = ?", "jobs")
+echo row.value
+commit(tx)
+```
+
+Call `rollback(tx)` to abort explicitly. If a transaction handle goes out of
+scope while still active, its destructor rolls the transaction back. While a
+transaction is active, use the transaction handle for queries; direct use of
+the database handle raises `BadOperation`.
+
+Savepoints are available with `savepoint(tx, name)`,
+`rollbackTo(tx, name)`, and `releaseSavepoint(tx, name)`. Savepoint names are
+validated as simple SQL identifiers before dokime builds the statement.
+
 ## Row Cardinality
 
 Row-returning `query()` requires at least one row. If SQLite returns no row,
@@ -167,7 +190,14 @@ schema nullability. Expressions and unknown origins are treated as nullable.
 | `queryOpt(db, sql, params...)`            | Optional row as `Opt[row]`           |
 | `rows(db, sql, params...)`                | Streaming row iterator               |
 | `exec(db, sql, params...)`                | No-column SQL as `SqlExecResult`     |
-| `openDatabase(path)` → `DbConn`           | Open or create a SQLite database     |
+| `beginTransaction(db)` → `Transaction`    | Start a SQLite transaction           |
+| `commit(tx)`                              | Commit an active transaction         |
+| `rollback(tx)`                            | Roll back an active transaction      |
+| `rollbackIfActive(tx)`                    | No-raise manual cleanup guard        |
+| `savepoint(tx, name)`                     | Create a transaction savepoint       |
+| `rollbackTo(tx, name)`                    | Roll back to a savepoint             |
+| `releaseSavepoint(tx, name)`              | Release a savepoint                  |
+| `openDatabase(path)` → `Database`         | Open or create a SQLite database     |
 | `closeDatabase(db)`                       | Close the connection                 |
 | `SqlExecResult.changes` → `int64`         | Rows changed by a command statement  |
 | `SqlExecResult.lastInsertRowid` → `int64` | Rowid from the command statement     |
