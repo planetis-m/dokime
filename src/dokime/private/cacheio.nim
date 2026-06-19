@@ -57,27 +57,27 @@ proc needBytes(state: var DecodeState; count: int): bool =
     result = true
 
 proc readU8(state: var DecodeState): uint8 =
-  if not state.needBytes(1):
-    return 0'u8
-  result = uint8(ord(state.data[state.pos]))
-  inc state.pos
+  result = 0'u8
+  if state.needBytes(1):
+    result = uint8(ord(state.data[state.pos]))
+    inc state.pos
 
 proc readU32(state: var DecodeState): uint32 =
-  if not state.needBytes(4):
-    return 0'u32
-  result =
-    uint32(ord(state.data[state.pos])) or
-    (uint32(ord(state.data[state.pos + 1])) shl 8) or
-    (uint32(ord(state.data[state.pos + 2])) shl 16) or
-    (uint32(ord(state.data[state.pos + 3])) shl 24)
-  inc state.pos, 4
+  result = 0'u32
+  if state.needBytes(4):
+    result =
+      uint32(ord(state.data[state.pos])) or
+      (uint32(ord(state.data[state.pos + 1])) shl 8) or
+      (uint32(ord(state.data[state.pos + 2])) shl 16) or
+      (uint32(ord(state.data[state.pos + 3])) shl 24)
+    inc state.pos, 4
 
 proc readString(state: var DecodeState): string =
+  result = ""
   let n = int(state.readU32())
-  if not state.needBytes(n):
-    return
-  result = substr(state.data, state.pos, state.pos + n - 1)
-  inc state.pos, n
+  if state.needBytes(n):
+    result = substr(state.data, state.pos, state.pos + n - 1)
+    inc state.pos, n
 
 proc encodeCache*(sql: string; columns: seq[ColumnMeta]; params: int): string =
   result = CacheMagic
