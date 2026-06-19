@@ -38,6 +38,11 @@ type
     error: string
     errorAt: LineInfo
 
+  CacheEntry = object
+    columns: seq[ColumnMeta]
+    params: int
+    error: string
+
 proc cacheQueriesDir(): string =
   result = DefaultCacheRoot / "queries"
 
@@ -104,52 +109,48 @@ proc encodeCache(sql: string; columns: seq[ColumnMeta]; params: int): string =
     result.addU8 uint8(ord(col.kind))
     result.addU8 if col.nullable: 1'u8 else: 0'u8
 
-proc decodeCache(data: string; expectedSql: string):
-    tuple[columns: seq[ColumnMeta], params: int, error: string] =
-  result = (columns: @[], params: 0, error: "")
+proc decodeCache(data: string; expectedSql: string): CacheEntry =
   var state = DecodeState(data: data, pos: 0, error: "")
   if not state.needBytes(CacheMagic.len):
-    result.error = state.error
-    return
+    return CacheEntry(columns: @[], params: 0, error: state.error)
   for ch in CacheMagic:
     if state.data[state.pos] != ch:
-      result.error = "cache file has invalid magic"
-      return
+      return CacheEntry(columns: @[], params: 0, error: "cache file has invalid magic")
     inc state.pos
 
   let version = state.readU32()
   if state.error.len > 0:
-    result.error = state.error
-    return
+    return CacheEntry(columns: @[], params: 0, error: state.error)
   if version != CacheVersion:
-    result.error = "unsupported cache version " & $version & " (expected " & $CacheVersion & ")"
-    return
+    return CacheEntry(columns: @[], params: 0,
+        error: "unsupported cache version " & $version &
+        " (expected " & $CacheVersion & ")")
 
   let cachedSql = state.readString()
   if cachedSql != expectedSql:
-    result.error = "cache SQL does not match query text"
-    return
+    return CacheEntry(columns: @[], params: 0, error: "cache SQL does not match query text")
 
-  result.params = int(state.readU32())
+  let params = int(state.readU32())
   let columnCount = int(state.readU32())
+  var columns: seq[ColumnMeta] = @[]
 
   for _ in 0..<columnCount:
     let name = state.readString()
     let kindValue = int(state.readU8())
     let nullable = state.readU8() != 0'u8
     if kindValue < ord(low(ColumnKind)) or kindValue > ord(high(ColumnKind)):
-      result.error = "cache has invalid column kind"
-      return
-    result.columns.add ColumnMeta(
+      return CacheEntry(columns: @[], params: 0, error: "cache has invalid column kind")
+    columns.add ColumnMeta(
       name: name,
       kind: cast[ColumnKind](kindValue),
       nullable: nullable
     )
 
   if state.error.len > 0:
-    result.error = state.error
-  elif state.pos != state.data.len:
-    result.error = "cache file has trailing bytes"
+    return CacheEntry(columns: @[], params: 0, error: state.error)
+  if state.pos != state.data.len:
+    return CacheEntry(columns: @[], params: 0, error: "cache file has trailing bytes")
+  result = CacheEntry(columns: columns, params: params)
 
 proc writeCache(sql: string; columns: seq[ColumnMeta]; params: int) =
   try:
@@ -159,16 +160,16 @@ proc writeCache(sql: string; columns: seq[ColumnMeta]; params: int) =
   except:
     discard
 
-proc readCache(sql: string): tuple[columns: seq[ColumnMeta], params: int, error: string] =
+proc readCache(sql: string): CacheEntry =
   let path = cacheFilePath(sql)
   if not fileExists(path):
-    result = (columns: @[], params: 0,
+    result = CacheEntry(columns: @[], params: 0,
       error: "offline cache entry not found for this SQL; build once with DOKIME_DATABASE_PATH set")
   else:
     try:
       result = decodeCache(readFile(path), sql)
     except:
-      result = (columns: @[], params: 0, error: "cannot read offline cache entry")
+      result = CacheEntry(columns: @[], params: 0, error: "cannot read offline cache entry")
 
 proc toColumnKind(typeName: string): ColumnKind =
   case typeName
@@ -290,47 +291,43 @@ proc inferNullable(db: sqlite3.DbConn; stmt: sqlite3.Stmt; col: int): bool =
   else:
     result = not (notNull != 0 or primaryKey != 0)
 
-proc validateSql(sql: string): tuple[columns: seq[ColumnMeta], params: int, error: string] =
-  var
-    columns: seq[ColumnMeta] = @[]
-    params = 0
-    errMsg: string = ""
-
+proc validateSql(sql: string): CacheEntry =
   var dbPath = getEnv("DOKIME_DATABASE_PATH")
   if dbPath.len == 0:
     result = readCache(sql)
     return
-  else:
-    var db: sqlite3.DbConn = nil
-    let rc = sqlite3_open_v2(toCString(dbPath), db, SQLITE_OPEN_READWRITE, nil)
-    if rc != SQLITE_OK:
-      let msg = if db != nil: fromCString(sqlite3_errmsg(db)) else: "open failed"
-      errMsg = "cannot open database: " & msg
-    else:
-      var stmt: sqlite3.Stmt = nil
-      var s = sql
-      let prepRc = sqlite3_prepare_v2(db, toCString(s), sql.len.cint, stmt, nil)
-      if prepRc != SQLITE_OK:
-        errMsg = fromCString(sqlite3_errmsg(db))
-      else:
-        params = sqlite3_bind_parameter_count(stmt).int
-        let count = sqlite3_column_count(stmt)
-        for i in 0..<count.int:
-          let colName = fromCString(sqlite3_column_name(stmt, i.cint))
-          let decltype = sqlite3_column_decltype(stmt, i.cint)
-          let typeStr = if decltype != nil: fromCString(decltype) else: ""
-          columns.add ColumnMeta(
-            name: colName,
-            kind: toColumnKind(typeStr),
-            nullable: inferNullable(db, stmt, i)
-          )
-        discard sqlite3_finalize(stmt)
-      discard sqlite3_close_v2(db)
 
-  if errMsg.len == 0:
-    writeCache(sql, columns, params)
+  var db: sqlite3.DbConn = nil
+  let rc = sqlite3_open_v2(toCString(dbPath), db, SQLITE_OPEN_READWRITE, nil)
+  if rc != SQLITE_OK:
+    let msg = if db != nil: fromCString(sqlite3_errmsg(db)) else: "open failed"
+    return CacheEntry(columns: @[], params: 0, error: "cannot open database: " & msg)
 
-  result = (columns, params, errMsg)
+  var stmt: sqlite3.Stmt = nil
+  var s = sql
+  let prepRc = sqlite3_prepare_v2(db, toCString(s), sql.len.cint, stmt, nil)
+  if prepRc != SQLITE_OK:
+    let errMsg = fromCString(sqlite3_errmsg(db))
+    discard sqlite3_close_v2(db)
+    return CacheEntry(columns: @[], params: 0, error: errMsg)
+
+  let params = sqlite3_bind_parameter_count(stmt).int
+  let count = sqlite3_column_count(stmt)
+  var columns: seq[ColumnMeta] = @[]
+  for i in 0..<count.int:
+    let colName = fromCString(sqlite3_column_name(stmt, i.cint))
+    let decltype = sqlite3_column_decltype(stmt, i.cint)
+    let typeStr = if decltype != nil: fromCString(decltype) else: ""
+    columns.add ColumnMeta(
+      name: colName,
+      kind: toColumnKind(typeStr),
+      nullable: inferNullable(db, stmt, i)
+    )
+  discard sqlite3_finalize(stmt)
+  discard sqlite3_close_v2(db)
+
+  writeCache(sql, columns, params)
+  result = CacheEntry(columns: columns, params: params)
 
 proc parseQueryInput(inp: NifCursor; mode: QueryMode): QueryInput =
   result = QueryInput(
@@ -462,22 +459,24 @@ proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
   if query.error.len > 0:
     result = errorTree(query.error, query.errorAt)
   else:
-    let (columns, params, errMsg) = validateSql(query.sql)
-    if errMsg.len > 0:
-      result = errorTree("dokime: " & errMsg, query.errorAt)
-    elif params != query.params.len:
+    let cache = validateSql(query.sql)
+    if cache.error.len > 0:
+      result = errorTree("dokime: " & cache.error, query.errorAt)
+    elif cache.params != query.params.len:
       result = errorTree(
-        "dokime: expected " & $params & " SQL parameter(s), got " & $query.params.len,
+        "dokime: expected " & $cache.params &
+        " SQL parameter(s), got " & $query.params.len,
         query.errorAt
       )
-    elif columns.len == 0 and mode == qmExec:
+    elif cache.columns.len == 0 and mode == qmExec:
       result = buildCommandTree(query)
-    elif columns.len == 0:
+    elif cache.columns.len == 0:
       result = errorTree(
-        "dokime: " & $mode & " requires row-returning SQL; use exec for command SQL",
+        "dokime: " & $mode &
+        " requires row-returning SQL; use exec for command SQL",
         query.errorAt
       )
     elif mode == qmExec:
       result = errorTree("dokime: exec requires command SQL with no result columns", query.errorAt)
     else:
-      result = buildRowTree(query, columns, mode)
+      result = buildRowTree(query, cache.columns, mode)
