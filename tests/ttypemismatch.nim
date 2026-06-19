@@ -1,12 +1,9 @@
-## Negative test: type mismatch.
+## Negative test: using an int64 column as float64.
+## Expected: type mismatch compile error.
 
-import std/syncio
 import ".." / "src" / dokime
 
-try:
-  let db = openDatabase("tests/quickstart.db")
-  let row = query(db, "SELECT id, name FROM users WHERE id = ?", 1'i64)
-  let x: float64 = row.id
-  echo x
-except ErrorCode as e:
-  echo "ERROR: " & $e
+let db = openDatabase("tests/validate.db")
+let row = query(db, "SELECT id, name FROM users WHERE id = ?", 1'i64)
+let x: float64 = row.id
+discard x

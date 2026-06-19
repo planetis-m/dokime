@@ -1,11 +1,7 @@
-## Negative test: verify compile-time SQL validation.
+## Negative test: query references a nonexistent column.
+## Expected: dokime compile error "no such column".
 
-import std/syncio
 import ".." / "src" / dokime
 
-try:
-  let db = openDatabase("tests/quickstart.db")
-  let row = query(db, "SELECT id, nonexistent_column FROM users WHERE id = ?", 1'i64)
-  echo row.nonexistent_column
-except ErrorCode as e:
-  echo "ERROR: " & $e
+let db = openDatabase("tests/validate.db")
+discard query(db, "SELECT id, nonexistent_column FROM users WHERE id = ?", 1'i64)

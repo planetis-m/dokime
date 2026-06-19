@@ -1,19 +1,10 @@
-## Nullable column test.
-##
-## Prepare the validation database first:
-##   sqlite3 tests/tnullable_validate.db \
-##     "CREATE TABLE profiles (id INTEGER NOT NULL, name TEXT NOT NULL, nickname TEXT, score REAL) STRICT"
-##
-## Run:
-##   DOKIME_DATABASE_PATH=tests/tnullable_validate.db \
-##   nimony c -r tests/tnullable.nim
+## Nullable column decoding.
 
-import std/assertions
-import std/syncio
+import std/[assertions, syncio]
 import ".." / "src" / dokime
 
 proc main() {.raises.} =
-  let db = openDatabase("tests/tnullable_runtime.db")
+  let db = openDatabase("tests/tnullable.db")
   discard exec(db, "DROP TABLE IF EXISTS profiles")
   discard exec(db, "CREATE TABLE IF NOT EXISTS profiles (id INTEGER NOT NULL, name TEXT NOT NULL, nickname TEXT, score REAL) STRICT")
   discard exec(db, "INSERT INTO profiles VALUES (?, ?, ?, ?)", 1'i64, "Alice", "Al", 9.5)

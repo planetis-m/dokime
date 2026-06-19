@@ -1,11 +1,6 @@
-## Streaming row iteration test.
-##
-## Run:
-##   DOKIME_DATABASE_PATH=tests/tvalidate.db \
-##   nimony c -r tests/trows.nim
+## Streaming row iteration.
 
-import std/assertions
-import std/syncio
+import std/[assertions, syncio]
 import ".." / "src" / dokime
 
 proc main() {.raises.} =

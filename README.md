@@ -172,27 +172,14 @@ schema nullability. Expressions and unknown origins are treated as nullable.
 | `SqlExecResult.changes` → `int64`         | Rows changed by a command statement  |
 | `SqlExecResult.lastInsertRowid` → `int64` | Rowid from the command statement     |
 
-## Run the tests
+## Tests
 
 ```bash
-# FFI bindings (no compile-time validation)
-nimony c -r tests/tffi.nim
-
-# Full integration (compile-time validation + runtime)
-DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/tphase5.nim
-
-# Command statements through exec()
-DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/texecute.nim
-
-# Required/optional row cardinality
-DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/tquerycardinality.nim
-
-# Nullable column decoding
-DOKIME_DATABASE_PATH=tests/tnullable_validate.db nimony c -r tests/tnullable.nim
-
-# Streaming row iteration
-DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/trows.nim
+nim c -r tests/tester.nim
 ```
+
+This creates the validation database automatically, compiles every test with
+Nimony, and verifies that negative tests fail with the expected compile errors.
 
 ## Limitations
 
@@ -201,16 +188,3 @@ DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/trows.nim
   extra rows are not checked yet. Use `rows()` to stream many rows.
 - `DOKIME_DATABASE_PATH` must be set at compile time (no offline schema cache).
 - STRICT tables required for reliable type inference.
-
-## Project layout
-
-| File                         | Purpose                                      |
-|------------------------------|----------------------------------------------|
-| `src/dokime.nim`             | Public API templates                         |
-| `src/dokime/types.nim`       | Public result types                          |
-| `src/dokime/sqlite3.nim`     | SQLite3 FFI bindings (dynlib)                |
-| `src/dokime/private/runtime.nim` | Private runtime used by generated code   |
-| `src/dokimeplugin.nim`       | Compile-time plugin (SQL validation + codegen) |
-| `src/dokimeoptplugin.nim`    | Optional-row query plugin                    |
-| `src/dokimerowsplugin.nim`   | Streaming row query plugin                   |
-| `src/dokimeexecplugin.nim`   | Command execution plugin                     |

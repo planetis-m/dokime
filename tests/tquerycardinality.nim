@@ -1,26 +1,7 @@
 ## query() and queryOpt() row cardinality behavior.
-##
-## Run:
-##   DOKIME_DATABASE_PATH=tests/tvalidate.db \
-##   nimony c -r tests/tquerycardinality.nim
 
-import std/assertions
-import std/syncio
+import std/[assertions, syncio]
 import ".." / "src" / dokime
-import ".." / "src" / "dokime" / sqlite3
-
-proc missingQuery(db: sqlite3.DbConn) {.raises.} =
-  discard query(db, "SELECT id, name FROM users WHERE id = ?", 2'i64)
-
-proc expectMissingRaises(db: sqlite3.DbConn) {.raises.} =
-  var raised = false
-  try:
-    missingQuery(db)
-  except ErrorCode as e:
-    assert e == BadOperation
-    raised = true
-
-  assert raised
 
 proc main() {.raises.} =
   let db = openDatabase("tests/tquerycardinality.db")
@@ -36,7 +17,16 @@ proc main() {.raises.} =
   let missing = queryOpt(db, "SELECT id, name FROM users WHERE id = ?", 2'i64)
   assert missing.isNone
 
-  expectMissingRaises(db)
+  # query() requires a row; verify it raises BadOperation when none found
+  block:
+    var raised = false
+    try:
+      discard query(db, "SELECT id, name FROM users WHERE id = ?", 2'i64)
+    except ErrorCode as e:
+      assert e == BadOperation
+      raised = true
+    assert raised, "query() should raise BadOperation when no row"
+
   closeDatabase(db)
 
 try:
