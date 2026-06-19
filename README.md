@@ -26,9 +26,9 @@ if maybeRow.isNone:
   schema — no manual type definitions, no drift between code and schema.
 - **Named tuple fields.** `row.id` and `row.name` come directly from the
   SQL column names. No positional indexing.
-- **Separate row and command APIs.** Use `query()` / `queryOpt()` / `rows()`
-  for SQL that returns columns, and `exec()` for `INSERT`, `UPDATE`, `DELETE`,
-  DDL, transactions, and maintenance commands.
+- **Result-shaped API.** Use `query()` / `queryOpt()` / `rows()` for SQL that
+  returns columns, and `exec()` for SQL that returns only command metadata.
+  Both paths are validated at compile time.
 - **Zero-abstraction FFI.** Runtime helpers call libsqlite3 directly.
   No ORM, no query builder, no allocations you didn't ask for.
 
@@ -111,9 +111,10 @@ let updated = exec(db, "UPDATE counters SET value = value + ? WHERE name = ?", 1
 echo updated.changes
 ```
 
-`exec()` rejects SQL that returns result columns. Use `query()` or `rows()` for
-`INSERT ... RETURNING`, `UPDATE ... RETURNING`, CTEs, and any other statement
-where SQLite reports result columns.
+The split follows the result shape, not the first SQL keyword: use `exec()` when
+SQLite reports no result columns; use `query()` or `rows()` for `INSERT ...
+RETURNING`, `UPDATE ... RETURNING`, CTEs, and any other statement that returns
+columns.
 
 ## Row Cardinality
 
@@ -161,11 +162,11 @@ schema nullability. Expressions and unknown origins are treated as nullable.
 
 | Proc / template                           | Purpose                              |
 |-------------------------------------------|--------------------------------------|
-| `query(db, sql, params...)`               | Compile-time validated SQL           |
-| `queryOne(db, sql, params...)`            | Required-row spelling for selects    |
+| `query(db, sql, params...)`               | Required row from row-returning SQL  |
+| `queryOne(db, sql, params...)`            | Explicit required-row spelling       |
 | `queryOpt(db, sql, params...)`            | Optional row as `Opt[row]`           |
 | `rows(db, sql, params...)`                | Streaming row iterator               |
-| `exec(db, sql, params...)`                | Command SQL as `SqlExecResult`       |
+| `exec(db, sql, params...)`                | No-column SQL as `SqlExecResult`     |
 | `openDatabase(path)` → `DbConn`           | Open or create a SQLite database     |
 | `closeDatabase(db)`                       | Close the connection                 |
 | `SqlExecResult.changes` → `int64`         | Rows changed by a command statement  |
