@@ -70,14 +70,14 @@ proc readU32(state: var DecodeState): uint32 =
     (uint32(ord(state.data[state.pos + 1])) shl 8) or
     (uint32(ord(state.data[state.pos + 2])) shl 16) or
     (uint32(ord(state.data[state.pos + 3])) shl 24)
-  state.pos += 4
+  inc state.pos, 4
 
 proc readString(state: var DecodeState): string =
   let n = int(state.readU32())
   if not state.needBytes(n):
     return
   result = substr(state.data, state.pos, state.pos + n - 1)
-  state.pos += n
+  inc state.pos, n
 
 proc encodeCache*(sql: string; columns: seq[ColumnMeta]; params: int): string =
   result = CacheMagic
