@@ -101,12 +101,14 @@ proc sqlite3_stmt_readonly*(s: Stmt): cint {.sql, importc: "sqlite3_stmt_readonl
 
 proc sqlite3_bind_parameter_count*(s: Stmt): cint {.sql, importc: "sqlite3_bind_parameter_count".}
 
-proc sqlite3_bind_int64*(s: Stmt, idx: cint, value: int64): cint {.sql, importc: "sqlite3_bind_int64".}
+proc sqlite3_bind_int64*(s: Stmt, idx: cint, value: int64): cint {.sql,
+    importc: "sqlite3_bind_int64".}
 
 proc sqlite3_bind_text*(s: Stmt, idx: cint, text: cstring, n: cint,
     destructor: nil pointer): cint {.sql, importc: "sqlite3_bind_text".}
 
-proc sqlite3_bind_double*(s: Stmt, idx: cint, value: float64): cint {.sql, importc: "sqlite3_bind_double".}
+proc sqlite3_bind_double*(s: Stmt, idx: cint, value: float64): cint {.sql,
+    importc: "sqlite3_bind_double".}
 
 proc sqlite3_bind_null*(s: Stmt, idx: cint): cint {.sql, importc: "sqlite3_bind_null".}
 
@@ -118,12 +120,14 @@ proc sqlite3_column_type*(s: Stmt, col: cint): cint {.sql, importc: "sqlite3_col
 
 proc sqlite3_column_name*(s: Stmt, col: cint): nil cstring {.sql, importc: "sqlite3_column_name".}
 
-proc sqlite3_column_decltype*(s: Stmt, col: cint): nil cstring {.sql, importc: "sqlite3_column_decltype".}
+proc sqlite3_column_decltype*(s: Stmt, col: cint): nil cstring {.sql,
+    importc: "sqlite3_column_decltype".}
 
 proc sqlite3_column_database_name*(s: Stmt, col: cint): nil cstring {.sql,
     importc: "sqlite3_column_database_name".}
 
-proc sqlite3_column_table_name*(s: Stmt, col: cint): nil cstring {.sql, importc: "sqlite3_column_table_name".}
+proc sqlite3_column_table_name*(s: Stmt, col: cint): nil cstring {.sql,
+    importc: "sqlite3_column_table_name".}
 
 proc sqlite3_column_origin_name*(s: Stmt, col: cint): nil cstring {.sql,
     importc: "sqlite3_column_origin_name".}
