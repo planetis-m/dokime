@@ -11,6 +11,10 @@ let db = openDatabase("myapp.db")
 let row = query(db, "SELECT id, name FROM users WHERE id = ?", 42'i64)
 echo row.id    # int64  — type comes from the schema, not a hand-written type
 echo row.name  # string — column names become field names
+
+let maybeRow = queryOpt(db, "SELECT id, name FROM users WHERE id = ?", 404'i64)
+if maybeRow.isNone:
+  echo "not found"
 ```
 
 ## Why try this?
@@ -106,11 +110,56 @@ let updated = query(db, "UPDATE counters SET value = value + ? WHERE name = ?", 
 echo updated.changes
 ```
 
+## Row Cardinality
+
+Row-returning `query()` requires at least one row. If SQLite returns no row,
+it raises `BadOperation` instead of decoding undefined column values.
+
+Use `queryOpt()` when no row is an expected result:
+
+```nim
+let user = queryOpt(db, "SELECT id, name FROM users WHERE id = ?", userId)
+if user.isSome:
+  echo user.unsafeGet.name
+```
+
+`queryOne()` is also available as an explicit spelling for the required-row
+path. Extra rows are not consumed yet; the current behavior is `fetch_one`
+semantics.
+
+## Streaming Rows
+
+Use `rows()` when you want to iterate every returned row without allocating a
+sequence first:
+
+```nim
+for user in rows(db, "SELECT id, name FROM users"):
+  echo user.name
+```
+
+The returned rows use the same schema-driven named tuple fields as `query()`.
+
+## Nullable Columns
+
+Nullable result columns decode to `Opt[T]`:
+
+```nim
+let profile = query(db, "SELECT id, nickname FROM profiles WHERE id = ?", id)
+if profile.nickname.isSome:
+  echo profile.nickname.unsafeGet
+```
+
+When dokime can trace a selected column back to a table column, it uses the
+schema nullability. Expressions and unknown origins are treated as nullable.
+
 ## API cheat sheet
 
 | Proc / template                           | Purpose                              |
 |-------------------------------------------|--------------------------------------|
 | `query(db, sql, params...)`               | Compile-time validated SQL           |
+| `queryOne(db, sql, params...)`            | Required-row spelling for selects    |
+| `queryOpt(db, sql, params...)`            | Optional row as `Opt[row]`           |
+| `rows(db, sql, params...)`                | Streaming row iterator               |
 | `openDatabase(path)` → `DbConn`           | Open or create a SQLite database     |
 | `closeDatabase(db)`                       | Close the connection                 |
 | `SqlExecResult.changes` → `int64`         | Rows changed by a command statement  |
@@ -127,13 +176,22 @@ DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/tphase5.nim
 
 # Command statements through query()
 DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/texecute.nim
+
+# Required/optional row cardinality
+DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/tquerycardinality.nim
+
+# Nullable column decoding
+DOKIME_DATABASE_PATH=tests/tnullable_validate.db nimony c -r tests/tnullable.nim
+
+# Streaming row iteration
+DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/trows.nim
 ```
 
 ## Limitations
 
 - SQLite only.
-- Row-returning SQL uses single-row fetch (`fetch_one` semantics).
-- No `Option[T]` for nullable columns yet.
+- `query()` and `queryOne()` use single-row fetch (`fetch_one` semantics);
+  extra rows are not checked yet. Use `rows()` to stream many rows.
 - `DOKIME_DATABASE_PATH` must be set at compile time (no offline schema cache).
 - STRICT tables required for reliable type inference.
 
@@ -146,3 +204,5 @@ DOKIME_DATABASE_PATH=tests/tvalidate.db nimony c -r tests/texecute.nim
 | `src/dokime/sqlite3.nim`     | SQLite3 FFI bindings (dynlib)                |
 | `src/dokime/private/runtime.nim` | Private runtime used by generated code   |
 | `src/dokimeplugin.nim`       | Compile-time plugin (SQL validation + codegen) |
+| `src/dokimeoptplugin.nim`    | Optional-row query plugin                    |
+| `src/dokimerowsplugin.nim`   | Streaming row query plugin                   |

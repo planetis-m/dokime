@@ -3,6 +3,11 @@ import std / opt
 import ".." / sqlite3
 import ".." / types
 
+type
+  RowSet*[T: tuple] = object
+    stmt: sqlite3.Stmt
+    rowShape: T
+
 template sqliteTransient(): pointer =
   cast[pointer](-1)
 
@@ -114,23 +119,61 @@ proc columnString*(stmt: sqlite3.Stmt; col: int): string =
 proc columnFloat64*(stmt: sqlite3.Stmt; col: int): float64 =
   result = sqlite3_column_double(stmt, col.cint)
 
-proc defaultInt64*(): int64 =
-  result = 0'i64
+proc columnOptInt64*(stmt: sqlite3.Stmt; col: int): Opt[int64] =
+  if sqlite3_column_type(stmt, col.cint) == SQLITE_NULL:
+    result = none[int64]()
+  else:
+    result = some(columnInt64(stmt, col))
 
-proc defaultString*(): string =
-  result = ""
+proc columnOptString*(stmt: sqlite3.Stmt; col: int): Opt[string] =
+  if sqlite3_column_type(stmt, col.cint) == SQLITE_NULL:
+    result = none[string]()
+  else:
+    result = some(columnString(stmt, col))
 
-proc defaultFloat64*(): float64 =
-  result = 0.0
+proc columnOptFloat64*(stmt: sqlite3.Stmt; col: int): Opt[float64] =
+  if sqlite3_column_type(stmt, col.cint) == SQLITE_NULL:
+    result = none[float64]()
+  else:
+    result = some(columnFloat64(stmt, col))
+
+proc initRows*[T: tuple](stmt: sqlite3.Stmt; rowShape: T): RowSet[T] =
+  result = RowSet[T](stmt: stmt, rowShape: rowShape)
+
+proc assignColumn(field: var int64; stmt: sqlite3.Stmt; col: int) =
+  field = columnInt64(stmt, col)
+
+proc assignColumn(field: var string; stmt: sqlite3.Stmt; col: int) =
+  field = columnString(stmt, col)
+
+proc assignColumn(field: var float64; stmt: sqlite3.Stmt; col: int) =
+  field = columnFloat64(stmt, col)
+
+proc assignColumn(field: var Opt[int64]; stmt: sqlite3.Stmt; col: int) =
+  field = columnOptInt64(stmt, col)
+
+proc assignColumn(field: var Opt[string]; stmt: sqlite3.Stmt; col: int) =
+  field = columnOptString(stmt, col)
+
+proc assignColumn(field: var Opt[float64]; stmt: sqlite3.Stmt; col: int) =
+  field = columnOptFloat64(stmt, col)
+
+proc decodeRow[T: tuple](rows: RowSet[T]): T =
+  result = rows.rowShape
+  var col = 0
+  for _, field in fieldPairs(result):
+    assignColumn(field, rows.stmt, col)
+    inc col
+
+iterator items*[T: tuple](rows: RowSet[T]): T {.sideEffect, raises.} =
+  try:
+    while stepHasRow(rows.stmt):
+      yield decodeRow(rows)
+  finally:
+    finalizeStmt(rows.stmt)
 
 proc missingRow*[T](row: T): T {.raises.} =
   raise BadOperation
-
-proc someRow*[T](row: T): Opt[T] =
-  result = some(row)
-
-proc noneRow*[T](row: T): Opt[T] =
-  result = none[T]()
 
 proc lastInsertRowid(db: sqlite3.DbConn): int64 =
   result = sqlite3_last_insert_rowid(db)

@@ -150,6 +150,27 @@ proc sqlite3_column_name*(s: Stmt, col: cint): nil cstring {.
 proc sqlite3_column_decltype*(s: Stmt, col: cint): nil cstring {.
   sql, importc: "sqlite3_column_decltype".}
 
+proc sqlite3_column_database_name*(s: Stmt, col: cint): nil cstring {.
+  sql, importc: "sqlite3_column_database_name".}
+
+proc sqlite3_column_table_name*(s: Stmt, col: cint): nil cstring {.
+  sql, importc: "sqlite3_column_table_name".}
+
+proc sqlite3_column_origin_name*(s: Stmt, col: cint): nil cstring {.
+  sql, importc: "sqlite3_column_origin_name".}
+
+proc sqlite3_table_column_metadata*(
+  db: DbConn,
+  dbName: nil cstring,
+  tableName: cstring,
+  columnName: cstring,
+  dataType: nil ptr cstring,
+  collSeq: nil ptr cstring,
+  notNull: var cint,
+  primaryKey: var cint,
+  autoInc: var cint
+): cint {.sql, importc: "sqlite3_table_column_metadata".}
+
 proc sqlite3_column_int64*(s: Stmt, col: cint): int64 {.
   sql, importc: "sqlite3_column_int64".}
 

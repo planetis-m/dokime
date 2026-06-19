@@ -100,3 +100,6 @@ template queryOne*(): untyped {.varargs, plugin: "dokimeplugin".}
 ##
 ## Use for row-returning SQL where no row is an expected result.
 template queryOpt*(): untyped {.varargs, plugin: "dokimeoptplugin".}
+
+## Compile-time validated SQL query that streams all returned rows.
+template rows*(): untyped {.varargs, plugin: "dokimerowsplugin".}

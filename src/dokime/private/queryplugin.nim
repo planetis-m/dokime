@@ -2,12 +2,13 @@
 
 import plugins
 import std / envvars
+import std / opt
 import runtime
 import ".." / sqlite3
 
 type
   QueryMode* = enum
-    qmOne, qmOpt
+    qmOne, qmOpt, qmRows
 
   ColumnKind = enum ckInteger, ckText, ckReal, ckBlob, ckNull
 
@@ -15,6 +16,7 @@ type
     name: string
     declaredType: string
     kind: ColumnKind
+    nullable: bool
 
   QueryInput = object
     dbExpr: NifCursor
@@ -33,33 +35,71 @@ proc toColumnKind(typeName: string): ColumnKind =
   of "BLOB": ckBlob
   else: ckNull
 
-proc addColumnExtractor(t: var NifBuilder; k: ColumnKind) =
-  case k
-  of ckInteger:
-    t.bindSym("columnInt64")
-  of ckText, ckNull:
-    t.bindSym("columnString")
-  of ckReal:
-    t.bindSym("columnFloat64")
-  of ckBlob:
-    t.bindSym("columnString")
-
-proc addDefaultValue(t: var NifBuilder; k: ColumnKind) =
-  t.withTree(CallX, NoLineInfo):
-    case k
+proc addValueType(t: var NifBuilder; col: ColumnMeta) =
+  if col.nullable:
+    t.withTree(AtX, NoLineInfo):
+      t.bindSym("Opt")
+      case col.kind
+      of ckInteger:
+        t.addIdent("int64")
+      of ckText, ckBlob, ckNull:
+        t.addIdent("string")
+      of ckReal:
+        t.addIdent("float64")
+  else:
+    case col.kind
     of ckInteger:
-      t.bindSym("defaultInt64")
+      t.addIdent("int64")
     of ckText, ckBlob, ckNull:
-      t.bindSym("defaultString")
+      t.addIdent("string")
     of ckReal:
-      t.bindSym("defaultFloat64")
+      t.addIdent("float64")
+
+proc addRowType(t: var NifBuilder; columns: seq[ColumnMeta]) =
+  t.withTree(TupleT, NoLineInfo):
+    for col in columns:
+      t.withTree(KvX, NoLineInfo):
+        t.addIdent(col.name)
+        t.addValueType(col)
+
+proc addColumnExtractor(t: var NifBuilder; col: ColumnMeta) =
+  if col.nullable:
+    case col.kind
+    of ckInteger:
+      t.bindSym("columnOptInt64")
+    of ckText, ckBlob, ckNull:
+      t.bindSym("columnOptString")
+    of ckReal:
+      t.bindSym("columnOptFloat64")
+  else:
+    case col.kind
+    of ckInteger:
+      t.bindSym("columnInt64")
+    of ckText, ckBlob, ckNull:
+      t.bindSym("columnString")
+    of ckReal:
+      t.bindSym("columnFloat64")
+
+proc addDefaultValue(t: var NifBuilder; col: ColumnMeta) =
+  if col.nullable:
+    t.withTree(CallX, NoLineInfo):
+      t.bindSym("default")
+      t.addValueType(col)
+  else:
+    case col.kind
+    of ckInteger:
+      t.addIntLit(0)
+    of ckText, ckBlob, ckNull:
+      t.addStrLit("")
+    of ckReal:
+      t.addFloatLit(0.0)
 
 proc addDefaultRow(t: var NifBuilder; columns: seq[ColumnMeta]) =
   t.withTree(TupX, NoLineInfo):
     for col in columns:
       t.withTree(KvX, NoLineInfo):
         t.addIdent(col.name)
-        t.addDefaultValue(col.kind)
+        t.addDefaultValue(col)
 
 proc addDecodedRow(t: var NifBuilder; columns: seq[ColumnMeta]) =
   t.withTree(TupX, NoLineInfo):
@@ -67,14 +107,9 @@ proc addDecodedRow(t: var NifBuilder; columns: seq[ColumnMeta]) =
       t.withTree(KvX, NoLineInfo):
         t.addIdent(col.name)
         t.withTree(CallX, NoLineInfo):
-          t.addColumnExtractor(col.kind)
+          t.addColumnExtractor(col)
           t.addIdent("__dokime_stmt")
           t.addIntLit(i)
-
-proc addFinalize(t: var NifBuilder) =
-  t.withTree(CallX, NoLineInfo):
-    t.bindSym("finalizeStmt")
-    t.addIdent("__dokime_stmt")
 
 proc addPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
   t.withTree(VarS, NoLineInfo):
@@ -93,23 +128,63 @@ proc addPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
       t.addIntLit(i + 1)
       t.addSubtree(paramCursor)
 
-proc addRowResult(t: var NifBuilder; mode: QueryMode) =
+proc addFinalize(t: var NifBuilder) =
+  t.withTree(CallX, NoLineInfo):
+    t.bindSym("finalizeStmt")
+    t.addIdent("__dokime_stmt")
+
+proc addRowResult(t: var NifBuilder; columns: seq[ColumnMeta]; mode: QueryMode) =
   case mode
   of qmOne:
     t.addIdent("__dokime_row")
   of qmOpt:
     t.withTree(CallX, NoLineInfo):
-      t.bindSym("someRow")
+      t.bindSym("some")
       t.addIdent("__dokime_row")
+  of qmRows:
+    discard
 
-proc addNoRowResult(t: var NifBuilder; mode: QueryMode) =
-  t.withTree(CallX, NoLineInfo):
-    case mode
-    of qmOne:
+proc addNoRowResult(t: var NifBuilder; columns: seq[ColumnMeta]; mode: QueryMode) =
+  case mode
+  of qmOne:
+    t.withTree(CallX, NoLineInfo):
       t.bindSym("missingRow")
-    of qmOpt:
-      t.bindSym("noneRow")
-    t.addIdent("__dokime_row")
+      t.addIdent("__dokime_row")
+  of qmOpt:
+    t.withTree(CallX, NoLineInfo):
+      t.withTree(AtX, NoLineInfo):
+        t.bindSym("none")
+        t.addRowType(columns)
+  of qmRows:
+    discard
+
+proc inferNullable(db: sqlite3.DbConn; stmt: sqlite3.Stmt; col: int): bool =
+  let tableName = sqlite3_column_table_name(stmt, col.cint)
+  let originName = sqlite3_column_origin_name(stmt, col.cint)
+  if tableName == nil:
+    return true
+  if originName == nil:
+    return true
+
+  var
+    notNull: cint = 0
+    primaryKey: cint = 0
+    autoInc: cint = 0
+  let rc = sqlite3_table_column_metadata(
+    db,
+    nil,
+    tableName,
+    originName,
+    nil,
+    nil,
+    notNull,
+    primaryKey,
+    autoInc
+  )
+  if rc != SQLITE_OK:
+    result = true
+  else:
+    result = not (notNull != 0 or primaryKey != 0)
 
 proc validateSql(sql: string): tuple[columns: seq[ColumnMeta], params: int, error: string] =
   var
@@ -153,7 +228,8 @@ proc validateSql(sql: string): tuple[columns: seq[ColumnMeta], params: int, erro
           columns.add ColumnMeta(
             name: colName,
             declaredType: typeStr,
-            kind: toColumnKind(typeStr)
+            kind: toColumnKind(typeStr),
+            nullable: inferNullable(db, stmt, i)
           )
         discard sqlite3_finalize(stmt)
       discard sqlite3_close_v2(db)
@@ -205,27 +281,33 @@ proc buildRowTree(
     result.addEmptyNode()
     result.withTree(StmtsS, input.errorAt):
       result.addPrepareAndBinds(input)
+      case mode
+      of qmRows:
+        result.withTree(CallX, NoLineInfo):
+          result.bindSym("initRows")
+          result.addIdent("__dokime_stmt")
+          result.addDefaultRow(columns)
+      of qmOne, qmOpt:
+        result.withTree(VarS, NoLineInfo):
+          result.addIdent("__dokime_row")
+          result.addEmptyNode3()
+          result.addDefaultRow(columns)
 
-      result.withTree(VarS, NoLineInfo):
-        result.addIdent("__dokime_row")
-        result.addEmptyNode3()
-        result.addDefaultRow(columns)
-
-      result.withTree(IfS, NoLineInfo):
-        result.withTree(ElifU, NoLineInfo):
-          result.withTree(CallX, NoLineInfo):
-            result.bindSym("stepHasRow")
-            result.addIdent("__dokime_stmt")
-          result.withTree(StmtsS, NoLineInfo):
-            result.withTree(AsgnS, NoLineInfo):
-              result.addIdent("__dokime_row")
-              result.addDecodedRow(columns)
-            result.addFinalize()
-            result.addRowResult(mode)
-        result.withTree(ElseU, NoLineInfo):
-          result.withTree(StmtsS, NoLineInfo):
-            result.addFinalize()
-            result.addNoRowResult(mode)
+        result.withTree(IfS, NoLineInfo):
+          result.withTree(ElifU, NoLineInfo):
+            result.withTree(CallX, NoLineInfo):
+              result.bindSym("stepHasRow")
+              result.addIdent("__dokime_stmt")
+            result.withTree(StmtsS, NoLineInfo):
+              result.withTree(AsgnS, NoLineInfo):
+                result.addIdent("__dokime_row")
+                result.addDecodedRow(columns)
+              result.addFinalize()
+              result.addRowResult(columns, mode)
+          result.withTree(ElseU, NoLineInfo):
+            result.withTree(StmtsS, NoLineInfo):
+              result.addFinalize()
+              result.addNoRowResult(columns, mode)
 
 proc buildCommandTree(input: QueryInput): NifBuilder =
   result = createTree()
@@ -254,6 +336,8 @@ proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
       )
     elif columns.len == 0 and mode == qmOpt:
       result = errorTree("dokime: queryOpt requires row-returning SQL", query.errorAt)
+    elif columns.len == 0 and mode == qmRows:
+      result = errorTree("dokime: rows requires row-returning SQL", query.errorAt)
     elif columns.len == 0:
       result = buildCommandTree(query)
     else:
