@@ -13,7 +13,7 @@ proc main() {.raises.} =
 
   let inserted = exec(db, "INSERT INTO users VALUES (?, ?, ?)", 10'i64, "Carol", 41'i64)
   assert inserted.changes == 1
-  assert inserted.lastInsertRowid > 0
+  assert inserted.lastRowid > 0
 
   let updated = exec(db, "UPDATE users SET age = ? WHERE id = ?", 42'i64, 10'i64)
   assert updated.changes == 1

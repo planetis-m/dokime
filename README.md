@@ -112,7 +112,7 @@ discard exec(db, """
 """)
 
 let inserted = exec(db, "INSERT INTO counters VALUES (?, ?)", "requests", 42'i64)
-echo inserted.lastInsertRowid
+echo inserted.lastRowid
 echo inserted.changes
 
 let updated = exec(db, "UPDATE counters SET value = value + ? WHERE name = ?", 1'i64, "requests")
@@ -126,7 +126,7 @@ columns.
 
 ## Transactions
 
-Use `beginTransaction()` to create a transaction handle. The same compile-time
+Use `begin()` to create a transaction handle. The same compile-time
 validated `query()`, `queryOpt()`, `rows()`, and `exec()` templates accept either
 a database connection or an active transaction:
 
@@ -187,12 +187,12 @@ let minAge = some(30'i64)
 let name = none[string]()
 
 for user in rows(db, """
-  SELECT id, name, age FROM users
-  WHERE 1 = 1
-    [AND age >= ?]
-    [AND name = ?]
-  ORDER BY id
-  """, minAge, name):
+SELECT id, name, age FROM users
+WHERE 1 = 1
+  [AND age >= ?]
+  [AND name = ?]
+ORDER BY id
+""", minAge, name):
   echo user.name
 ```
 
@@ -231,7 +231,7 @@ schema nullability. Expressions and unknown origins are treated as nullable.
 | `connect(path)` → `Database`              | Open or create a SQLite database     |
 | `close(db)`                               | Close the connection                 |
 | `SqlExecResult.changes` → `int64`         | Rows changed by a command statement  |
-| `SqlExecResult.lastInsertRowid` → `int64` | Rowid from the command statement     |
+| `SqlExecResult.lastRowid` → `int64`       | Rowid from the command statement     |
 
 ## Tests
 

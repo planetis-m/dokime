@@ -9,7 +9,7 @@ type
 
   SqlExecResult* = object
     changes*: int64
-    lastInsertRowid*: int64
+    lastRowid*: int64
 
   DatabaseObj = object
     conn: sqlite3.DbConn
@@ -314,7 +314,7 @@ iterator items*[T: tuple](rows: RowSet[T]): T {.sideEffect, raises.} =
     checkFinalizeCode(finalizeRc)
 
 proc execStmtForDb(db: sqlite3.DbConn; stmt: sqlite3.Stmt): SqlExecResult {.raises.} =
-  result = SqlExecResult(changes: 0, lastInsertRowid: 0)
+  result = SqlExecResult(changes: 0, lastRowid: 0)
   let readOnly = sqlite3_stmt_readonly(stmt) != 0
   let stepRc = stepStmtCode(stmt)
   var
@@ -334,7 +334,7 @@ proc execStmtForDb(db: sqlite3.DbConn; stmt: sqlite3.Stmt): SqlExecResult {.rais
 
   result = SqlExecResult(
     changes: resultChanges,
-    lastInsertRowid: resultLastInsertRowid)
+    lastRowid: resultLastInsertRowid)
 
 template execStmt*(target: untyped; stmt: sqlite3.Stmt): untyped =
   execStmtForDb(databaseHandle(target), stmt)

@@ -55,7 +55,7 @@ template exec*(): untyped {.varargs, plugin: "dokime/private/plugins/exec".}
   ##
   ## Use for INSERT, UPDATE, DELETE, DDL, BEGIN, COMMIT, and ROLLBACK.
   ## Returns a `SqlExecResult` with `.changes` (rows affected) and
-  ## `.lastInsertRowid` fields.
+  ## `.lastRowid` fields.
   ##
   ## ```nim
   ## let result = exec(db, "UPDATE users SET active = 1 WHERE id = ?", uid)
