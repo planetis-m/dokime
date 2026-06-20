@@ -23,9 +23,6 @@ type
 func hasDynamicParts*(sql: ParsedSql): bool =
   result = sql.clauseCount > 0
 
-func expectedParamCount*(sql: ParsedSql): int =
-  result = sql.params.len
-
 func sqlSlice(sql: string; first, last: int): string =
   result = ""
   if first <= last:

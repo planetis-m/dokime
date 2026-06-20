@@ -270,7 +270,7 @@ proc emitPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
 # Optional-variant validation
 # ---------------------------------------------------------------------------
 
-proc validateVariants(parsed: ParsedSql): QueryCheck =
+proc validateDynamicSql(parsed: ParsedSql): QueryCheck =
   var expectedColumns: seq[ColumnMeta] = @[]
 
   for mask in 0..<parsed.variantCount:
@@ -286,7 +286,7 @@ proc validateVariants(parsed: ParsedSql): QueryCheck =
     elif not sameColumns(expectedColumns, entry.columns):
       return QueryCheck(error: "optional SQL variants must return the same columns")
 
-  result = QueryCheck(columns: expectedColumns)
+  result = QueryCheck(columns: expectedColumns, expectedParams: parsed.params.len)
 
 # ---------------------------------------------------------------------------
 # Query input parsing
@@ -489,8 +489,7 @@ proc buildCommandTree(input: QueryInput): NifBuilder =
 
 proc validateQuery(query: QueryInput): QueryCheck =
   if query.parsedSql.hasDynamicParts:
-    result = validateVariants(query.parsedSql)
-    result.expectedParams = query.parsedSql.expectedParamCount
+    result = validateDynamicSql(query.parsedSql)
   else:
     let cache = validateSql(query.sql)
     result = QueryCheck(
