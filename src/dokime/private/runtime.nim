@@ -28,18 +28,18 @@ proc `=copy`*[T: tuple](dest: var RowSet[T]; src: RowSet[T]) {.error.}
 
 proc `=dup`*[T: tuple](rs: RowSet[T]): RowSet[T] {.error.}
 
-proc `=destroy`(db: DatabaseObj) {.raises: [].} =
+proc `=destroy`(db: DatabaseObj) =
   if db.conn != nil:
     if db.txActive:
       discard sqlite3_exec(db.conn, cstring("ROLLBACK"), nil, nil, nil)
     discard sqlite3_close_v2(db.conn)
 
-proc `=destroy`(tx: Transaction) {.raises: [].} =
+proc `=destroy`(tx: Transaction) =
   if tx.db != nil and tx.active and tx.db.conn != nil:
     discard sqlite3_exec(tx.db.conn, cstring("ROLLBACK"), nil, nil, nil)
     tx.db.txActive = false
 
-proc `=wasMoved`(tx: var Transaction) {.raises: [].} =
+proc `=wasMoved`(tx: var Transaction) =
   tx.db = nil
   tx.active = false
 
@@ -47,7 +47,7 @@ proc `=copy`(dest: var Transaction; src: Transaction) {.error.}
 
 proc `=dup`(tx: Transaction): Transaction {.error.}
 
-proc sqliteErrorCode(rc: cint): ErrorCode {.raises: [].} =
+proc sqliteErrorCode(rc: cint): ErrorCode =
   case rc
   of SQLITE_OK, SQLITE_ROW, SQLITE_DONE:
     result = Success
@@ -106,7 +106,7 @@ proc requireActiveTransaction(tx: Transaction): sqlite3.DbConn {.raises.} =
     raise BadOperation
   result = tx.db.conn
 
-proc validSavepointName(name: string): bool {.raises: [].} =
+proc validSavepointName(name: string): bool =
   if name.len == 0 or name.len > 63:
     return false
 
@@ -124,10 +124,10 @@ proc savepointSql(name: string; keyword: string): string {.raises.} =
     raise ValueError
   result = keyword & " " & name
 
-proc isActive*(tx: Transaction): bool {.raises: [].} =
+proc isActive*(tx: Transaction): bool =
   result = tx.db != nil and tx.db.conn != nil and tx.active
 
-proc databaseHandle(db: sqlite3.DbConn): sqlite3.DbConn {.raises: [].} =
+proc databaseHandle(db: sqlite3.DbConn): sqlite3.DbConn =
   result = db
 
 proc databaseHandle(db: Database): sqlite3.DbConn {.raises.} =
@@ -196,13 +196,13 @@ proc prepareStmtBytes(db: sqlite3.DbConn; sql: cstring;
 template prepareStmt*(target: untyped; sql: typed; sqlLen: int): untyped =
   prepareStmtBytes(databaseHandle(target), cstring(sql), sqlLen)
 
-proc finalizeStmtCode*(stmt: sqlite3.Stmt): cint {.raises: [].} =
+proc finalizeStmtCode*(stmt: sqlite3.Stmt): cint =
   result = sqlite3_finalize(stmt)
 
-proc stepStmtCode*(stmt: sqlite3.Stmt): cint {.raises: [].} =
+proc stepStmtCode*(stmt: sqlite3.Stmt): cint =
   result = sqlite3_step(stmt)
 
-proc stepReturnedRow*(rc: cint): bool {.raises: [].} =
+proc stepReturnedRow*(rc: cint): bool =
   result = rc == SQLITE_ROW
 
 proc checkFinalizeCode*(rc: cint) {.raises.} =
@@ -237,59 +237,59 @@ proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: string) {.raises.} =
 proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: float64) {.raises.} =
   bindFloat64(stmt, idx, value)
 
-proc columnInt64*(stmt: sqlite3.Stmt; col: int): int64 {.raises: [].} =
+proc columnInt64*(stmt: sqlite3.Stmt; col: int): int64 =
   result = sqlite3_column_int64(stmt, col.cint)
 
-proc columnString*(stmt: sqlite3.Stmt; col: int): string {.raises: [].} =
+proc columnString*(stmt: sqlite3.Stmt; col: int): string =
   let cstr = sqlite3_column_text(stmt, col.cint)
   if cstr != nil:
     result = fromCString(cstr)
   else:
     result = ""
 
-proc columnFloat64*(stmt: sqlite3.Stmt; col: int): float64 {.raises: [].} =
+proc columnFloat64*(stmt: sqlite3.Stmt; col: int): float64 =
   result = sqlite3_column_double(stmt, col.cint)
 
-proc columnOptInt64*(stmt: sqlite3.Stmt; col: int): Opt[int64] {.raises: [].} =
+proc columnOptInt64*(stmt: sqlite3.Stmt; col: int): Opt[int64] =
   if sqlite3_column_type(stmt, col.cint) == SQLITE_NULL:
     result = none[int64]()
   else:
     result = some(columnInt64(stmt, col))
 
-proc columnOptString*(stmt: sqlite3.Stmt; col: int): Opt[string] {.raises: [].} =
+proc columnOptString*(stmt: sqlite3.Stmt; col: int): Opt[string] =
   if sqlite3_column_type(stmt, col.cint) == SQLITE_NULL:
     result = none[string]()
   else:
     result = some(columnString(stmt, col))
 
-proc columnOptFloat64*(stmt: sqlite3.Stmt; col: int): Opt[float64] {.raises: [].} =
+proc columnOptFloat64*(stmt: sqlite3.Stmt; col: int): Opt[float64] =
   if sqlite3_column_type(stmt, col.cint) == SQLITE_NULL:
     result = none[float64]()
   else:
     result = some(columnFloat64(stmt, col))
 
-proc initRows*[T: tuple](stmt: sqlite3.Stmt; rowShape: T): RowSet[T] {.raises: [].} =
+proc initRows*[T: tuple](stmt: sqlite3.Stmt; rowShape: T): RowSet[T] =
   result = RowSet[T](stmt: stmt, rowShape: rowShape)
 
-proc assignColumn(field: var int64; stmt: sqlite3.Stmt; col: int) {.raises: [].} =
+proc assignColumn(field: var int64; stmt: sqlite3.Stmt; col: int) =
   field = columnInt64(stmt, col)
 
-proc assignColumn(field: var string; stmt: sqlite3.Stmt; col: int) {.raises: [].} =
+proc assignColumn(field: var string; stmt: sqlite3.Stmt; col: int) =
   field = columnString(stmt, col)
 
-proc assignColumn(field: var float64; stmt: sqlite3.Stmt; col: int) {.raises: [].} =
+proc assignColumn(field: var float64; stmt: sqlite3.Stmt; col: int) =
   field = columnFloat64(stmt, col)
 
-proc assignColumn(field: var Opt[int64]; stmt: sqlite3.Stmt; col: int) {.raises: [].} =
+proc assignColumn(field: var Opt[int64]; stmt: sqlite3.Stmt; col: int) =
   field = columnOptInt64(stmt, col)
 
-proc assignColumn(field: var Opt[string]; stmt: sqlite3.Stmt; col: int) {.raises: [].} =
+proc assignColumn(field: var Opt[string]; stmt: sqlite3.Stmt; col: int) =
   field = columnOptString(stmt, col)
 
-proc assignColumn(field: var Opt[float64]; stmt: sqlite3.Stmt; col: int) {.raises: [].} =
+proc assignColumn(field: var Opt[float64]; stmt: sqlite3.Stmt; col: int) =
   field = columnOptFloat64(stmt, col)
 
-proc decodeRow[T: tuple](rows: RowSet[T]): T {.raises: [].} =
+proc decodeRow[T: tuple](rows: RowSet[T]): T =
   result = rows.rowShape
   var col = 0
   for _, field in fieldPairs(result):

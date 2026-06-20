@@ -3,7 +3,7 @@
 import runtime
 import ".." / sqlite3
 
-proc emptyStmt*(): sqlite3.Stmt {.raises: [].} =
+proc emptyStmt*(): sqlite3.Stmt =
   result = nil
 
 proc bindNextParam*(stmt: sqlite3.Stmt; idx: var int; value: int64) {.raises.} =
