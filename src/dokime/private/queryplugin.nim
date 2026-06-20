@@ -69,6 +69,7 @@ proc emitRowType(t: var NifBuilder; columns: seq[ColumnMeta])
         t.addIdent(col.name)
         t.emitValueType(col)
 
+# columnOptInt64 | columnInt64 | columnOptString | columnString | columnOptFloat64 | columnFloat64
 proc emitColumnExtractor(t: var NifBuilder; col: ColumnMeta)
     {.ensuresNif: addedExpr(t).} =
   if col.nullable:
@@ -223,6 +224,10 @@ proc emitVariantPredicate(t: var NifBuilder; mask: int)
     t.addIdent("__dokime_variant")
     t.addIntLit(mask)
 
+# (stmts
+#   (asgn __dokime_stmt (call prepareStmt DB SQL SQL_LEN))
+#   (var __dokime_bind . . 1)
+#   (call bindNextParam __dokime_stmt __dokime_bind ARG)*)
 proc emitVariantBody(t: var NifBuilder; input: QueryInput; mask: int) =
   let sql = input.parsedSql.renderVariant(mask)
   t.emitPrepareAssignment(input, sql)
@@ -236,6 +241,12 @@ proc emitVariantBody(t: var NifBuilder; input: QueryInput; mask: int) =
     if spec.clauseIndex < 0 or (mask and (1 shl spec.clauseIndex)) != 0:
       t.emitBindForParam(i, spec)
 
+# (let __dokime_param_I . . PARAM)*
+# (var __dokime_variant . . int 0)
+# (if ...)
+# (var __dokime_stmt . . (call emptyStmt))
+# (if (elif (eq int __dokime_variant MASK) VARIANT_BODY)*
+#     (else VARIANT_BODY))
 proc emitDynamicPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
   t.emitParamLocals(input)
   t.emitVariantMask(input)
@@ -251,6 +262,7 @@ proc emitDynamicPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
       t.withTree(StmtsS, NoLineInfo):
         t.emitVariantBody(input, 0)
 
+# Dynamic or static prepare-and-binds depending on hasDynamicParts
 proc emitPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
   if input.parsedSql.hasDynamicParts:
     t.emitDynamicPrepareAndBinds(input)
@@ -423,6 +435,14 @@ proc emitOneOrOptResult(t: var NifBuilder; mode: QueryMode)
   else:
     t.addIdent("__dokime_result")
 
+# (var __dokime_row . . DEFAULT_ROW)
+# (var __dokime_result . . (call none (at Opt ROW_TYPE)))?  -- qmOpt only
+# (var __dokime_step . . (call stepStmtCode __dokime_stmt))
+# (if (elif ...))
+# (var __dokime_finalize . . (call finalizeStmtCode __dokime_stmt))
+# (call checkStepCode __dokime_step)
+# (call checkFinalizeCode __dokime_finalize)
+# __dokime_row | __dokime_result
 proc emitOneOrOptQuery(t: var NifBuilder; columns: seq[ColumnMeta]; mode: QueryMode) =
   t.emitRowVar(columns)
   if mode == qmOpt:
