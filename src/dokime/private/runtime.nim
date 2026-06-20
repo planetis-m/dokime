@@ -178,7 +178,7 @@ proc release*(tx: Transaction; name: string) {.raises.} =
   var sql = savepointSql(name, "RELEASE SAVEPOINT")
   execSql(requireActiveTransaction(tx), toCString(sql))
 
-proc rollbackTo*(tx: Transaction; name: string) {.raises.} =
+proc rollback*(tx: Transaction; name: string) {.raises.} =
   var sql = savepointSql(name, "ROLLBACK TO SAVEPOINT")
   execSql(requireActiveTransaction(tx), toCString(sql))
 

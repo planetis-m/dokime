@@ -57,7 +57,7 @@ proc main() {.raises.} =
     discard exec(tx, "INSERT INTO users VALUES (?, ?, ?)", 4'i64, "Edsger", 42'i64)
     savepoint(tx, "after_edsger")
     discard exec(tx, "INSERT INTO users VALUES (?, ?, ?)", 5'i64, "Barbara", 38'i64)
-    rollbackTo(tx, "after_edsger")
+    rollback(tx, "after_edsger")
     release(tx, "after_edsger")
     commit(tx)
     let saved = query(db, "SELECT id FROM users WHERE id = ?", 4'i64)

@@ -144,7 +144,7 @@ transaction is active, use the transaction handle for queries; direct use of
 the database handle raises `BadOperation`.
 
 Savepoints are available with `savepoint(tx, name)`,
-`rollbackTo(tx, name)`, and `release(tx, name)`. Savepoint names are
+`rollback(tx, name)`, and `release(tx, name)`. Savepoint names are
 validated as simple SQL identifiers before dokime builds the statement.
 
 ## Row Cardinality
@@ -226,7 +226,7 @@ schema nullability. Expressions and unknown origins are treated as nullable.
 | `commit(tx)`                              | Commit an active transaction         |
 | `rollback(tx)`                            | Roll back an active transaction      |
 | `savepoint(tx, name)`                     | Create a transaction savepoint       |
-| `rollbackTo(tx, name)`                    | Roll back to a savepoint             |
+| `rollback(tx, name)`                      | Roll back to a savepoint             |
 | `release(tx, name)`                       | Release a savepoint                  |
 | `connect(path)` → `Database`              | Open or create a SQLite database     |
 | `close(db)`                               | Close the connection                 |
