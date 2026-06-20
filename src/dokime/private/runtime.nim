@@ -24,6 +24,13 @@ type
 template sqliteTransient(): pointer =
   cast[pointer](-1)
 
+proc `=destroy`*[T: tuple](rows: RowSet[T]) =
+  if rows.stmt != nil:
+    discard sqlite3_finalize(rows.stmt)
+
+proc `=wasMoved`*[T: tuple](rows: var RowSet[T]) =
+  rows.stmt = nil
+
 proc `=copy`*[T: tuple](dest: var RowSet[T]; src: RowSet[T]) {.error.}
 proc `=dup`*[T: tuple](rs: RowSet[T]): RowSet[T] {.error.}
 
@@ -32,6 +39,10 @@ proc `=destroy`(db: DatabaseObj) =
     if db.txActive:
       discard sqlite3_exec(db.conn, cstring("ROLLBACK"), nil, nil, nil)
     discard sqlite3_close_v2(db.conn)
+
+proc `=wasMoved`(db: var DatabaseObj) =
+  db.conn = nil
+  db.txActive = false
 
 proc `=destroy`(tx: Transaction) =
   if tx.db != nil and tx.active and tx.db.conn != nil:
@@ -320,24 +331,19 @@ proc decodeRow[T: tuple](rows: RowSet[T]): T =
     assignColumn(field, rows.stmt, col)
     inc col
 
-iterator items*[T: tuple](rows: RowSet[T]): T {.sideEffect, raises.} =
+iterator items*[T: tuple](rows: sink RowSet[T]): T {.sideEffect, raises.} =
   var
     stepRc = SQLITE_OK
-    finalizeRc = SQLITE_OK
     exhausted = false
-  try:
-    while true:
-      stepRc = stepStmtCode(rows.stmt)
-      if stepRc == SQLITE_ROW:
-        yield decodeRow(rows)
-      else:
-        exhausted = true
-        break
-  finally:
-    finalizeRc = finalizeStmtCode(rows.stmt)
+  while true:
+    stepRc = stepStmtCode(rows.stmt)
+    if stepRc == SQLITE_ROW:
+      yield decodeRow(rows)
+    else:
+      exhausted = true
+      break
   if exhausted:
     checkStepCode(stepRc)
-    checkFinalizeCode(finalizeRc)
 
 proc execStmtForDb(db: sqlite3.DbConn; stmt: sqlite3.Stmt): ExecResult {.raises.} =
   result = ExecResult(changes: 0, lastRowid: 0)
