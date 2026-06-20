@@ -27,12 +27,9 @@ type
     error: string
     errorAt: LineInfo
 
-  Validation = object
+  QueryCheck = object
     columns: seq[ColumnMeta]
     error: string
-
-  QueryCheck = object
-    validation: Validation
     expectedParams: int
 
 # ---------------------------------------------------------------------------
@@ -273,23 +270,23 @@ proc emitPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
 # Optional-variant validation
 # ---------------------------------------------------------------------------
 
-proc validateVariants(parsed: ParsedSql): Validation =
+proc validateVariants(parsed: ParsedSql): QueryCheck =
   var expectedColumns: seq[ColumnMeta] = @[]
 
   for mask in 0..<parsed.variantCount:
     let sql = parsed.renderVariant(mask)
     let entry = validateSql(sql)
     if entry.error.len > 0:
-      return Validation(error: entry.error & " in optional SQL variant " & $mask & ": " & sql)
+      return QueryCheck(error: entry.error & " in optional SQL variant " & $mask & ": " & sql)
     if entry.params != parsed.variantParamCount(mask):
-      return Validation(error: "parameter count mismatch in optional SQL variant")
+      return QueryCheck(error: "parameter count mismatch in optional SQL variant")
 
     if mask == 0:
       expectedColumns = entry.columns
     elif not sameColumns(expectedColumns, entry.columns):
-      return Validation(error: "optional SQL variants must return the same columns")
+      return QueryCheck(error: "optional SQL variants must return the same columns")
 
-  result = Validation(columns: expectedColumns)
+  result = QueryCheck(columns: expectedColumns)
 
 # ---------------------------------------------------------------------------
 # Query input parsing
@@ -492,13 +489,13 @@ proc buildCommandTree(input: QueryInput): NifBuilder =
 
 proc validateQuery(query: QueryInput): QueryCheck =
   if query.parsedSql.hasDynamicParts:
-    result = QueryCheck(
-      validation: validateVariants(query.parsedSql),
-      expectedParams: query.parsedSql.expectedParamCount)
+    result = validateVariants(query.parsedSql)
+    result.expectedParams = query.parsedSql.expectedParamCount
   else:
     let cache = validateSql(query.sql)
     result = QueryCheck(
-      validation: Validation(columns: cache.columns, error: cache.error),
+      columns: cache.columns,
+      error: cache.error,
       expectedParams: cache.params)
 
 proc resultShapeError(mode: QueryMode; columns: seq[ColumnMeta]): string =
@@ -518,9 +515,9 @@ proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
     result = errorTree(query.error, query.errorAt)
   else:
     let check = validateQuery(query)
-    let shapeError = resultShapeError(mode, check.validation.columns)
-    if check.validation.error.len > 0:
-      result = errorTree("dokime: " & check.validation.error, query.errorAt)
+    let shapeError = resultShapeError(mode, check.columns)
+    if check.error.len > 0:
+      result = errorTree("dokime: " & check.error, query.errorAt)
     elif check.expectedParams != query.params.len:
       result = errorTree("dokime: expected " & $check.expectedParams &
           " SQL parameter(s), got " & $query.params.len, query.errorAt)
@@ -529,4 +526,4 @@ proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
     elif mode == qmExec:
       result = buildCommandTree(query)
     else:
-      result = buildRowTree(query, check.validation.columns, mode)
+      result = buildRowTree(query, check.columns, mode)
