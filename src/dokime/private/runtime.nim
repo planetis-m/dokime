@@ -7,7 +7,7 @@ type
     stmt: sqlite3.Stmt
     rowShape: T
 
-  SqlExecResult* = object
+  ExecResult* = object
     changes*: int64
     lastRowid*: int64
 
@@ -313,8 +313,8 @@ iterator items*[T: tuple](rows: RowSet[T]): T {.sideEffect, raises.} =
     checkStepCode(stepRc)
     checkFinalizeCode(finalizeRc)
 
-proc execStmtForDb(db: sqlite3.DbConn; stmt: sqlite3.Stmt): SqlExecResult {.raises.} =
-  result = SqlExecResult(changes: 0, lastRowid: 0)
+proc execStmtForDb(db: sqlite3.DbConn; stmt: sqlite3.Stmt): ExecResult {.raises.} =
+  result = ExecResult(changes: 0, lastRowid: 0)
   let readOnly = sqlite3_stmt_readonly(stmt) != 0
   let stepRc = stepStmtCode(stmt)
   var
@@ -332,7 +332,7 @@ proc execStmtForDb(db: sqlite3.DbConn; stmt: sqlite3.Stmt): SqlExecResult {.rais
   checkStepCode(stepRc)
   checkFinalizeCode(finalizeRc)
 
-  result = SqlExecResult(
+  result = ExecResult(
     changes: resultChanges,
     lastRowid: resultLastInsertRowid)
 

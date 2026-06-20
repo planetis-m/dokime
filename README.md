@@ -96,7 +96,7 @@ DOKIME_DATABASE_PATH= nimony c -r myapp.nim
 ## Commands
 
 Statements that do not return columns execute through `exec()` and return
-`SqlExecResult`:
+`ExecResult`:
 
 ```nim
 import std / syncio
@@ -220,7 +220,7 @@ schema nullability. Expressions and unknown origins are treated as nullable.
 | `queryOne(db, sql, params...)`            | Explicit required-row spelling       |
 | `queryOpt(db, sql, params...)`            | Optional row as `Opt[row]`           |
 | `rows(db, sql, params...)`                | Streaming row iterator               |
-| `exec(db, sql, params...)`                | No-column SQL as `SqlExecResult`     |
+| `exec(db, sql, params...)`                | No-column SQL as `ExecResult`        |
 | `[SQL with ?]` + `Opt[T]` param           | Optional SQL clause                  |
 | `begin(db)` → `Transaction`               | Start a SQLite transaction           |
 | `commit(tx)`                              | Commit an active transaction         |
@@ -230,8 +230,8 @@ schema nullability. Expressions and unknown origins are treated as nullable.
 | `release(tx, name)`                       | Release a savepoint                  |
 | `connect(path)` → `Database`              | Open or create a SQLite database     |
 | `close(db)`                               | Close the connection                 |
-| `SqlExecResult.changes` → `int64`         | Rows changed by a command statement  |
-| `SqlExecResult.lastRowid` → `int64`       | Rowid from the command statement     |
+| `ExecResult.changes` → `int64`            | Rows changed by a command statement  |
+| `ExecResult.lastRowid` → `int64`          | Rowid from the command statement     |
 
 ## Tests
 
