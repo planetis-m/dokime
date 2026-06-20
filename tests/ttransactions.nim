@@ -25,12 +25,12 @@ proc assertDatabaseBlocked(db: Database) {.raises.} =
   assert raised
 
 proc main() {.raises.} =
-  let db = openDatabase("tests/ttransactions.db")
+  let db = connect("tests/ttransactions.db")
   discard exec(db, "DROP TABLE IF EXISTS users")
   discard exec(db, "CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT")
 
   block commit_persists:
-    var tx = beginTransaction(db)
+    var tx = begin(db)
     discard exec(tx, "INSERT INTO users VALUES (?, ?, ?)", 1'i64, "Ada", 36'i64)
     let row = query(tx, "SELECT name FROM users WHERE id = ?", 1'i64)
     assert row.name == "Ada"
@@ -40,7 +40,7 @@ proc main() {.raises.} =
     assert committed.name == "Ada"
 
   block explicit_rollback_discards:
-    var tx = beginTransaction(db)
+    var tx = begin(db)
     discard exec(tx, "INSERT INTO users VALUES (?, ?, ?)", 2'i64, "Grace", 40'i64)
     assertDatabaseBlocked(db)
     rollback(tx)
@@ -48,23 +48,23 @@ proc main() {.raises.} =
 
   block destructor_rollback_discards:
     block:
-      var tx = beginTransaction(db)
+      var tx = begin(db)
       discard exec(tx, "INSERT INTO users VALUES (?, ?, ?)", 3'i64, "Lin", 29'i64)
     assertMissing(db, 3'i64)
 
   block savepoint_rollback:
-    var tx = beginTransaction(db)
+    var tx = begin(db)
     discard exec(tx, "INSERT INTO users VALUES (?, ?, ?)", 4'i64, "Edsger", 42'i64)
     savepoint(tx, "after_edsger")
     discard exec(tx, "INSERT INTO users VALUES (?, ?, ?)", 5'i64, "Barbara", 38'i64)
     rollbackTo(tx, "after_edsger")
-    releaseSavepoint(tx, "after_edsger")
+    release(tx, "after_edsger")
     commit(tx)
     let saved = query(db, "SELECT id FROM users WHERE id = ?", 4'i64)
     assert saved.id == 4
     assertMissing(db, 5'i64)
 
-  closeDatabase(db)
+  close(db)
 
 try:
   main()

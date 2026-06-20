@@ -4,7 +4,7 @@ import std/[assertions, syncio]
 import ".." / "src" / dokime
 
 proc main() {.raises.} =
-  let db = openDatabase("tests/tnullable.db")
+  let db = connect("tests/tnullable.db")
   discard exec(db, "DROP TABLE IF EXISTS profiles")
   discard exec(db, "CREATE TABLE IF NOT EXISTS profiles (id INTEGER NOT NULL, name TEXT NOT NULL, nickname TEXT, score REAL) STRICT")
   discard exec(db, "INSERT INTO profiles VALUES (?, ?, ?, ?)", 1'i64, "Alice", "Al", 9.5)
@@ -24,7 +24,7 @@ proc main() {.raises.} =
   assert bob.nickname.isNone
   assert bob.score.isNone
 
-  closeDatabase(db)
+  close(db)
 
 try:
   main()

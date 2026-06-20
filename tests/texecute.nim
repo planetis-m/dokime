@@ -4,7 +4,7 @@ import std/[assertions, syncio]
 import ".." / "src" / dokime
 
 proc main() {.raises.} =
-  let db = openDatabase("tests/texecute.db")
+  let db = connect("tests/texecute.db")
   discard exec(db, "DROP TABLE IF EXISTS users")
   discard exec(db, "CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT")
 
@@ -26,7 +26,7 @@ proc main() {.raises.} =
 
   let commitResult = exec(db, "COMMIT")
   assert commitResult.changes == 0
-  closeDatabase(db)
+  close(db)
 
 try:
   main()

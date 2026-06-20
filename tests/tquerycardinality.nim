@@ -16,7 +16,7 @@ proc checkMissingRaises(db: Database) {.raises.} =
   assert raised, "missing query should raise BadOperation"
 
 proc main() {.raises.} =
-  let db = openDatabase("tests/tquerycardinality.db")
+  let db = connect("tests/tquerycardinality.db")
   discard exec(db, "DROP TABLE IF EXISTS users")
   discard exec(db, "CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT")
   discard exec(db, "INSERT INTO users VALUES (?, ?, ?)", 1'i64, "Alice", 30'i64)
@@ -30,7 +30,7 @@ proc main() {.raises.} =
   assert missing.isNone
 
   checkMissingRaises(db)
-  closeDatabase(db)
+  close(db)
 
 try:
   main()

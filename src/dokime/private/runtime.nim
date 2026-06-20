@@ -136,7 +136,7 @@ proc databaseHandle(db: Database): sqlite3.DbConn {.raises.} =
 proc databaseHandle(tx: Transaction): sqlite3.DbConn {.raises.} =
   result = requireActiveTransaction(tx)
 
-proc openDatabaseCString(path: cstring): sqlite3.DbConn {.raises.} =
+proc connectCString(path: cstring): sqlite3.DbConn {.raises.} =
   var db: sqlite3.DbConn = nil
   let rc = sqlite3_open_v2(path, db, cint(SQLITE_OPEN_READWRITE or SQLITE_OPEN_CREATE), nil)
   if rc != SQLITE_OK:
@@ -145,18 +145,18 @@ proc openDatabaseCString(path: cstring): sqlite3.DbConn {.raises.} =
     checkSqlite(rc)
   result = db
 
-proc openDatabase*(path: sink string): Database {.raises.} =
-  result = Database(conn: openDatabaseCString(toCString(path)), txActive: false)
+proc connect*(path: sink string): Database {.raises.} =
+  result = Database(conn: connectCString(toCString(path)), txActive: false)
 
-proc closeDatabase*(db: sqlite3.DbConn) {.raises.} =
+proc close*(db: sqlite3.DbConn) {.raises.} =
   checkSqlite(sqlite3_close_v2(db))
 
-proc closeDatabase*(db: Database) {.raises.} =
+proc close*(db: Database) {.raises.} =
   let conn = requireOpenDatabase(db)
   checkSqlite(sqlite3_close_v2(conn))
   db.conn = nil
 
-proc beginTransaction*(db: Database): Transaction {.raises.} =
+proc begin*(db: Database): Transaction {.raises.} =
   let conn = requireOpenDatabase(db)
   execSql(conn, cstring("BEGIN"))
   db.txActive = true
@@ -178,7 +178,7 @@ proc savepoint*(tx: Transaction; name: string) {.raises.} =
   var sql = savepointSql(name, "SAVEPOINT")
   execSql(requireActiveTransaction(tx), toCString(sql))
 
-proc releaseSavepoint*(tx: Transaction; name: string) {.raises.} =
+proc release*(tx: Transaction; name: string) {.raises.} =
   var sql = savepointSql(name, "RELEASE SAVEPOINT")
   execSql(requireActiveTransaction(tx), toCString(sql))
 

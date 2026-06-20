@@ -4,7 +4,7 @@ import std/[assertions, opt, syncio]
 import ".." / "src" / dokime
 
 proc main() {.raises.} =
-  let db = openDatabase("tests/tdynamicclauses.db")
+  let db = connect("tests/tdynamicclauses.db")
   discard exec(db, "DROP TABLE IF EXISTS users")
   discard exec(db, "CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT")
   discard exec(db, "INSERT INTO users VALUES (?, ?, ?)", 1'i64, "Ada", 36'i64)
@@ -54,7 +54,7 @@ proc main() {.raises.} =
       names.add user.name
     assert names == @["Ada", "Grace"]
 
-  closeDatabase(db)
+  close(db)
 
 try:
   main()

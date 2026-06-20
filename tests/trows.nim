@@ -4,7 +4,7 @@ import std/[assertions, syncio]
 import ".." / "src" / dokime
 
 proc main() {.raises.} =
-  let db = openDatabase("tests/trows.db")
+  let db = connect("tests/trows.db")
   discard exec(db, "DROP TABLE IF EXISTS users")
   discard exec(db, "CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT")
   discard exec(db, "INSERT INTO users VALUES (?, ?, ?)", 1'i64, "Alice", 30'i64)
@@ -18,7 +18,7 @@ proc main() {.raises.} =
 
   assert count == 2, "expected 2 rows, got " & $count
   assert names == "AliceBob", "expected AliceBob, got " & names
-  closeDatabase(db)
+  close(db)
 
 try:
   main()

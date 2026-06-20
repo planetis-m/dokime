@@ -4,7 +4,7 @@ import std/[assertions, syncio]
 import ".." / "src" / dokime
 
 proc main() {.raises.} =
-  let db = openDatabase("tests/tphase5.db")
+  let db = connect("tests/tphase5.db")
   discard exec(db, "DROP TABLE IF EXISTS users")
   discard exec(db, "CREATE TABLE IF NOT EXISTS users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT")
 
@@ -13,9 +13,9 @@ proc main() {.raises.} =
 
   let insert2 = exec(db, "INSERT INTO users VALUES (?, ?, ?)", 2'i64, "Bob", 25'i64)
   assert insert2.changes == 1
-  closeDatabase(db)
+  close(db)
 
-  let runtimeDb = openDatabase("tests/tphase5.db")
+  let runtimeDb = connect("tests/tphase5.db")
   let userId = 1'i64
   let row = query(runtimeDb, "SELECT id, name, age FROM users WHERE id = ?", userId)
 
@@ -27,7 +27,7 @@ proc main() {.raises.} =
   assert row.id == 1
   assert row.name == "Alice"
   assert row.age == 30
-  closeDatabase(runtimeDb)
+  close(runtimeDb)
   echo "\nPhase 5 passed: parameterized query works end-to-end."
 
 try:

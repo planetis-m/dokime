@@ -1,6 +1,6 @@
 ## Shared implementation for dokime query template plugins.
 ##
-## Parses a `query`/`queryOpt`/`rows`/`exec` invocation, validates the SQL
+## Parses a `query`/`queryMaybe`/`queryAll`/`exec` invocation, validates the SQL
 ## (either against the live database via `sqlvalidate` or against the cached
 ## column metadata), and emits the corresponding NIF tree that prepares,
 ## binds, steps and decodes the statement at runtime.

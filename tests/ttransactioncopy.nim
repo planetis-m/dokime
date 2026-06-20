@@ -4,8 +4,8 @@ import std/syncio
 import ".." / "src" / dokime
 
 proc main() {.raises.} =
-  let db = openDatabase("tests/ttransactioncopy.db")
-  var tx = beginTransaction(db)
+  let db = connect("tests/ttransactioncopy.db")
+  var tx = begin(db)
   let copied = tx
   discard copied
   discard tx.isActive

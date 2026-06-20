@@ -2,7 +2,7 @@
 ##
 ## ```nim
 ## import dokime
-## var db = openDatabase("mydb.sqlite")
+## var db = connect("mydb.sqlite")
 ## let row = query(db, "SELECT id, name FROM users WHERE id = ?", 42'i64)
 ## echo row.id     # int64
 ## echo row.name   # string
