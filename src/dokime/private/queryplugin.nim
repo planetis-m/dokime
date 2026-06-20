@@ -39,27 +39,26 @@ type
 # Column type emission
 # ---------------------------------------------------------------------------
 
+# int64 | string | float64
+proc addAtomType(t: var NifBuilder; col: ColumnMeta)
+    {.ensuresNif: addedExpr(t).} =
+  case col.kind
+  of ckInteger:
+    t.addIdent("int64")
+  of ckText, ckBlob, ckNull:
+    t.addIdent("string")
+  of ckReal:
+    t.addIdent("float64")
+
 # (at Opt TYPE) | TYPE
 proc emitValueType(t: var NifBuilder; col: ColumnMeta)
     {.ensuresNif: addedAny(t).} =
   if col.nullable:
     t.withTree(AtX, NoLineInfo):
       t.bindSym("Opt")
-      case col.kind
-      of ckInteger:
-        t.addIdent("int64")
-      of ckText, ckBlob, ckNull:
-        t.addIdent("string")
-      of ckReal:
-        t.addIdent("float64")
+      t.addAtomType(col)
   else:
-    case col.kind
-    of ckInteger:
-      t.addIdent("int64")
-    of ckText, ckBlob, ckNull:
-      t.addIdent("string")
-    of ckReal:
-      t.addIdent("float64")
+    t.addAtomType(col)
 
 # (tuple (kv NAME TYPE)*)
 proc emitRowType(t: var NifBuilder; columns: seq[ColumnMeta])
@@ -89,21 +88,12 @@ proc emitColumnExtractor(t: var NifBuilder; col: ColumnMeta)
     of ckReal:
       t.bindSym("columnFloat64")
 
-# 0 | "" | 0.0 | (call default TYPE)
+# (call default TYPE) -- resolves to none for Opt[T], zero value for atoms.
 proc emitDefaultValue(t: var NifBuilder; col: ColumnMeta)
     {.ensuresNif: addedExpr(t).} =
-  if col.nullable:
-    t.withTree(CallX, NoLineInfo):
-      t.bindSym("default")
-      t.emitValueType(col)
-  else:
-    case col.kind
-    of ckInteger:
-      t.addIntLit(0)
-    of ckText, ckBlob, ckNull:
-      t.addStrLit("")
-    of ckReal:
-      t.addFloatLit(0.0)
+  t.withTree(CallX, NoLineInfo):
+    t.bindSym("default")
+    t.emitValueType(col)
 
 # (tuple (kv NAME DEFAULT_VALUE)*)
 proc emitDefaultRow(t: var NifBuilder; columns: seq[ColumnMeta])
@@ -491,8 +481,7 @@ proc resultShapeError(mode: QueryMode; columns: seq[ColumnMeta]): string =
     if mode == qmExec:
       result = ""
     else:
-      result = "dokime: " & $mode &
-        " requires row-returning SQL; use exec for command SQL"
+      result = "dokime: " & $mode & " requires row-returning SQL; use exec for command SQL"
   elif mode == qmExec:
     result = "dokime: exec requires command SQL with no result columns"
   else:
