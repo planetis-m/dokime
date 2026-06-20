@@ -422,18 +422,6 @@ proc buildCommandTree(input: QueryInput; info: LineInfo): NifBuilder =
         result.addSubtree(input.dbExpr)
         result.addIdent("__dokime_stmt")
 
-
-proc resultShapeError(mode: QueryMode; columns: seq[ColumnMeta]): string =
-  if columns.len == 0:
-    if mode == qmExec:
-      result = ""
-    else:
-      result = "dokime: " & $mode & " requires row-returning SQL; use exec for command SQL"
-  elif mode == qmExec:
-    result = "dokime: exec requires command SQL with no result columns"
-  else:
-    result = ""
-
 proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
   if inp.kind != ParLe or inp.stmtKind != StmtsS:
     return errorTree("dokime: invalid plugin input", inp.info)
@@ -463,14 +451,16 @@ proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
   let query = QueryInput(dbExpr: dbExpr, sql: sql, parsedSql: parsed, params: params)
   let check = if parsed.hasDynamicParts: validateDynamicSql(parsed)
               else: validateSql(sql)
-  let shapeError = resultShapeError(mode, check.columns)
   if check.error.len > 0:
     return errorTree("dokime: " & check.error, inp.info)
-  if check.params != query.params.len:
+  elif check.params != query.params.len:
     return errorTree("dokime: expected " & $check.params &
         " SQL parameter(s), got " & $query.params.len, inp.info)
-  if shapeError.len > 0:
-    return errorTree(shapeError, inp.info)
+  elif mode == qmExec and check.columns.len > 0:
+    return errorTree("dokime: exec requires command SQL with no result columns", inp.info)
+  elif mode != qmExec and check.columns.len == 0:
+    return errorTree(
+        "dokime: " & $mode & " requires row-returning SQL; use exec for command SQL", inp.info)
 
   if mode == qmExec:
     result = buildCommandTree(query, inp.info)
