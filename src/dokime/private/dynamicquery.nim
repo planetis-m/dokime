@@ -5,9 +5,6 @@ import cacheio
 const MaxOptionalParts* = 8
 
 type
-  ParamSpec* = object
-    clauseIndex*: int
-
   SqlPart* = object
     text*: string
     isOptional*: bool
@@ -16,7 +13,7 @@ type
 
   ParsedSql* = object
     parts*: seq[SqlPart]
-    params*: seq[ParamSpec]
+    params*: seq[int]
     clauseCount*: int
     error*: string
 
@@ -50,8 +47,7 @@ proc addPart(parsed: var ParsedSql; text: string; isOptional: bool;
       if text[i] == '?':
         let paramIndex = paramBase + paramIndexes.len
         paramIndexes.add paramIndex
-        parsed.params.add ParamSpec(
-          clauseIndex: if isOptional: clauseIndex else: -1)
+        parsed.params.add(if isOptional: clauseIndex else: -1)
       inc i
 
   if isOptional and paramIndexes.len != 1:
@@ -65,22 +61,20 @@ proc addPart(parsed: var ParsedSql; text: string; isOptional: bool;
     clauseIndex: clauseIndex,
     paramIndexes: paramIndexes)
 
-func findOptionalClose(sql: string; start: int; error: var string): int =
-  result = start + 1
-  while result < sql.len:
-    case sql[result]
+func findOptionalClose(sql: string; start: int): (int, string) =
+  var pos = start + 1
+  while pos < sql.len:
+    case sql[pos]
     of '\'':
-      result = sql.skipStringLiteral(result)
+      pos = sql.skipStringLiteral(pos)
     of '[':
-      error = "nested optional SQL blocks are not supported"
-      return -1
+      return (-1, "nested optional SQL blocks are not supported")
     of ']':
-      return
+      return (pos, "")
     else:
-      inc result
+      inc pos
 
-  error = "unterminated optional SQL block"
-  result = -1
+  return (-1, "unterminated optional SQL block")
 
 proc parseDynamicSql*(sql: string): ParsedSql =
   result = ParsedSql(parts: @[], params: @[], clauseCount: 0, error: "")
@@ -95,8 +89,9 @@ proc parseDynamicSql*(sql: string): ParsedSql =
     of '[':
       result.addPart(substr(sql, textStart, i - 1), false, -1)
 
-      let close = sql.findOptionalClose(i, result.error)
-      if close < 0:
+      let (close, err) = sql.findOptionalClose(i)
+      if err.len > 0:
+        result.error = err
         return
 
       let clauseIndex = result.clauseCount
@@ -119,8 +114,11 @@ proc parseDynamicSql*(sql: string): ParsedSql =
 func variantCount*(sql: ParsedSql): int =
   result = 1 shl sql.clauseCount
 
+func clauseActive*(mask: int; clauseIndex: int): bool =
+  result = (mask and (1 shl clauseIndex)) != 0
+
 func includesPart(mask: int; part: SqlPart): bool =
-  result = not part.isOptional or (mask and (1 shl part.clauseIndex)) != 0
+  result = not part.isOptional or mask.clauseActive(part.clauseIndex)
 
 func renderVariant*(sql: ParsedSql; mask: int): string =
   result = ""
@@ -130,18 +128,6 @@ func renderVariant*(sql: ParsedSql; mask: int): string =
 
 func variantParamCount*(sql: ParsedSql; mask: int): int =
   result = 0
-  for spec in sql.params:
-    if spec.clauseIndex < 0 or (mask and (1 shl spec.clauseIndex)) != 0:
+  for clauseIndex in sql.params:
+    if clauseIndex < 0 or mask.clauseActive(clauseIndex):
       inc result
-
-func sameColumns*(a, b: seq[ColumnMeta]): bool =
-  if a.len != b.len:
-    return false
-  for i in 0..<a.len:
-    if a[i].name != b[i].name:
-      return false
-    if a[i].kind != b[i].kind:
-      return false
-    if a[i].nullable != b[i].nullable:
-      return false
-  result = true

@@ -200,13 +200,13 @@ proc emitPrepareAssignment(t: var NifBuilder; input: QueryInput; sql: string)
 
 # (call bindNextParam __dokime_stmt __dokime_bind
 #   (unsafeGet __dokime_param_I) | __dokime_param_I)
-proc emitBindForParam(t: var NifBuilder; paramIndex: int; spec: ParamSpec)
+proc emitBindForParam(t: var NifBuilder; paramIndex: int; clauseIndex: int)
     {.ensuresNif: addedStmt(t).} =
   t.withTree(CallX, NoLineInfo):
     t.bindSym("bindNextParam")
     t.addIdent("__dokime_stmt")
     t.addIdent("__dokime_bind")
-    if spec.clauseIndex < 0:
+    if clauseIndex < 0:
       t.addIdent(paramName(paramIndex))
     else:
       t.withTree(CallX, NoLineInfo):
@@ -234,9 +234,9 @@ proc emitVariantBody(t: var NifBuilder; input: QueryInput; mask: int) =
     t.addEmptyNode3()
     t.addIntLit(1)
 
-  for i, spec in input.parsedSql.params:
-    if spec.clauseIndex < 0 or (mask and (1 shl spec.clauseIndex)) != 0:
-      t.emitBindForParam(i, spec)
+  for i, clauseIndex in input.parsedSql.params:
+    if clauseIndex < 0 or mask.clauseActive(clauseIndex):
+      t.emitBindForParam(i, clauseIndex)
 
 # (let __dokime_param_I . . PARAM)*
 # (var __dokime_variant . . int 0)
