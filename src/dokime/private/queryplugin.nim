@@ -23,9 +23,6 @@ type
     sql: string
     parsedSql: ParsedSql
     params: seq[NifCursor]
-    hasSql: bool
-    error: string
-    errorAt: LineInfo
 
 # ---------------------------------------------------------------------------
 # Column type emission
@@ -296,7 +293,7 @@ proc validateDynamicSql(parsed: ParsedSql): SqlMeta =
   result = SqlMeta(columns: expectedColumns, params: parsed.params.len)
 
 # ---------------------------------------------------------------------------
-# Query input parsing
+# SQL literal reading
 # ---------------------------------------------------------------------------
 
 proc readSqlLiteral(node: NifCursor; sql: var string): bool =
@@ -309,41 +306,6 @@ proc readSqlLiteral(node: NifCursor; sql: var string): bool =
     if child.hasMore and child.kind == StringLit:
       sql = child.stringValue
       result = true
-
-proc parseQueryInput(inp: NifCursor; mode: QueryMode): QueryInput =
-  result = QueryInput(dbExpr: inp, errorAt: inp.info)
-  if inp.kind != ParLe or inp.stmtKind != StmtsS:
-    result.error = "dokime: invalid plugin input"
-    return
-
-  var child = inp
-  var argIndex = 0
-  child.loopInto:
-    case argIndex
-    of 0:
-      result.dbExpr = child
-    of 1:
-      var sql = ""
-      if readSqlLiteral(child, sql):
-        result.sql = sql
-        result.hasSql = true
-      else:
-        result.error = "dokime: second argument must be a SQL string literal"
-        result.errorAt = child.info
-    else:
-      result.params.add(child)
-    skip child
-    inc argIndex
-
-  if result.error.len == 0 and not result.hasSql:
-    result.error = "dokime: expected " & $mode & "(db, \"SQL\", params...)"
-    result.errorAt = inp.info
-  elif result.error.len == 0:
-    let parsed = parseDynamicSql(result.sql)
-    if parsed.error.len > 0:
-      result.error = "dokime: " & parsed.error
-    else:
-      result.parsedSql = parsed
 
 # ---------------------------------------------------------------------------
 # Result emission
@@ -465,11 +427,11 @@ proc emitOneOrOptQuery(t: var NifBuilder; columns: seq[ColumnMeta]; mode: QueryM
 #     PREPARE_AND_BINDS
 #     (call initRows __dokime_stmt DEFAULT_ROW) | ONE_OR_OPT_QUERY))
 proc buildRowTree(input: QueryInput; columns: seq[ColumnMeta];
-    mode: QueryMode): NifBuilder =
+    mode: QueryMode; info: LineInfo): NifBuilder =
   result = createTree()
-  result.withTree(BlockS, input.errorAt):
+  result.withTree(BlockS, info):
     result.addEmptyNode()
-    result.withTree(StmtsS, input.errorAt):
+    result.withTree(StmtsS, info):
       result.emitPrepareAndBinds(input)
       case mode
       of qmRows:
@@ -483,11 +445,11 @@ proc buildRowTree(input: QueryInput; columns: seq[ColumnMeta];
 #   (stmts
 #     PREPARE_AND_BINDS
 #     (call execStmt DB __dokime_stmt)))
-proc buildCommandTree(input: QueryInput): NifBuilder =
+proc buildCommandTree(input: QueryInput; info: LineInfo): NifBuilder =
   result = createTree()
-  result.withTree(BlockS, input.errorAt):
+  result.withTree(BlockS, info):
     result.addEmptyNode()
-    result.withTree(StmtsS, input.errorAt):
+    result.withTree(StmtsS, info):
       result.emitPrepareAndBinds(input)
       result.withTree(CallX, NoLineInfo):
         result.bindSym("execStmt")
@@ -512,20 +474,43 @@ proc resultShapeError(mode: QueryMode; columns: seq[ColumnMeta]): string =
     result = ""
 
 proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
-  let query = parseQueryInput(inp, mode)
-  if query.error.len > 0:
-    result = errorTree(query.error, query.errorAt)
-  else:
-    let check = validateQuery(query)
-    let shapeError = resultShapeError(mode, check.columns)
-    if check.error.len > 0:
-      result = errorTree("dokime: " & check.error, query.errorAt)
-    elif check.params != query.params.len:
-      result = errorTree("dokime: expected " & $check.params &
-          " SQL parameter(s), got " & $query.params.len, query.errorAt)
-    elif shapeError.len > 0:
-      result = errorTree(shapeError, query.errorAt)
-    elif mode == qmExec:
-      result = buildCommandTree(query)
+  if inp.kind != ParLe or inp.stmtKind != StmtsS:
+    return errorTree("dokime: invalid plugin input", inp.info)
+
+  var dbExpr: NifCursor
+  var sql = ""
+  var params: seq[NifCursor] = @[]
+  var argIndex = 0
+  var child = inp
+  child.loopInto:
+    case argIndex
+    of 0: dbExpr = child
+    of 1:
+      if not readSqlLiteral(child, sql):
+        return errorTree("dokime: second argument must be a SQL string literal", child.info)
     else:
-      result = buildRowTree(query, check.columns, mode)
+      params.add(child)
+    skip child; inc argIndex
+
+  if sql.len == 0:
+    return errorTree("dokime: expected " & $mode & "(db, \"SQL\", params...)", inp.info)
+
+  let parsed = parseDynamicSql(sql)
+  if parsed.error.len > 0:
+    return errorTree("dokime: " & parsed.error, inp.info)
+
+  let query = QueryInput(dbExpr: dbExpr, sql: sql, parsedSql: parsed, params: params)
+  let check = validateQuery(query)
+  let shapeError = resultShapeError(mode, check.columns)
+  if check.error.len > 0:
+    return errorTree("dokime: " & check.error, inp.info)
+  if check.params != query.params.len:
+    return errorTree("dokime: expected " & $check.params &
+        " SQL parameter(s), got " & $query.params.len, inp.info)
+  if shapeError.len > 0:
+    return errorTree(shapeError, inp.info)
+
+  if mode == qmExec:
+    result = buildCommandTree(query, inp.info)
+  else:
+    result = buildRowTree(query, check.columns, mode, inp.info)
