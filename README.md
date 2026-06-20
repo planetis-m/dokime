@@ -176,6 +176,29 @@ for user in rows(db, "SELECT id, name FROM users"):
 
 The returned rows use the same schema-driven named tuple fields as `query()`.
 
+## Dynamic Optional Clauses
+
+Wrap an optional SQL clause in square brackets and pass an `Opt[T]` for its
+`?` parameter. Dokime validates every included/omitted variant at compile time,
+then includes the clause at runtime only when the option is `some`.
+
+```nim
+let minAge = some(30'i64)
+let name = none[string]()
+
+for user in rows(db, """
+  SELECT id, name, age FROM users
+  WHERE 1 = 1
+    [AND age >= ?]
+    [AND name = ?]
+  ORDER BY id
+  """, minAge, name):
+  echo user.name
+```
+
+Each optional block contains exactly one `?`. Required parameters outside
+optional blocks continue to use plain values.
+
 ## Nullable Columns
 
 Nullable result columns decode to `Opt[T]`:
@@ -198,6 +221,7 @@ schema nullability. Expressions and unknown origins are treated as nullable.
 | `queryOpt(db, sql, params...)`            | Optional row as `Opt[row]`           |
 | `rows(db, sql, params...)`                | Streaming row iterator               |
 | `exec(db, sql, params...)`                | No-column SQL as `SqlExecResult`     |
+| `[SQL with ?]` + `Opt[T]` param           | Optional SQL clause                  |
 | `beginTransaction(db)` → `Transaction`    | Start a SQLite transaction           |
 | `commit(tx)`                              | Commit an active transaction         |
 | `rollback(tx)`                            | Roll back an active transaction      |

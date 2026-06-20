@@ -18,6 +18,7 @@ const Positive = [
   "tphase5.nim",
   "texecute.nim",
   "ttransactions.nim",
+  "tdynamicclauses.nim",
   "tquerycardinality.nim",
   "tnullable.nim",
   "trows.nim"

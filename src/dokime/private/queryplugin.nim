@@ -2,6 +2,8 @@
 
 import std/[envvars, opt]
 import cacheio
+import dynamicquery
+import dynamicruntime
 import plugins
 import runtime
 import ".." / sqlite3
@@ -16,11 +18,16 @@ type
   QueryInput = object
     dbExpr: NifCursor
     sql: string
+    parsedSql: ParsedSql
     params: seq[NifCursor]
     bindCount: int
     hasSql: bool
     error: string
     errorAt: LineInfo
+
+  Validation = object
+    columns: seq[ColumnMeta]
+    error: string
 
 proc toColumnKind(typeName: string): ColumnKind =
   case typeName
@@ -106,6 +113,16 @@ proc addDecodedRow(t: var NifBuilder; columns: seq[ColumnMeta]) =
           t.addIdent("__dokime_stmt")
           t.addIntLit(i)
 
+proc paramName(index: int): string =
+  result = "__dokime_param_" & $index
+
+proc addParamLocals(t: var NifBuilder; input: QueryInput) =
+  for i, paramCursor in input.params:
+    t.withTree(LetS, NoLineInfo):
+      t.addIdent(paramName(i))
+      t.addEmptyNode3()
+      t.addSubtree(paramCursor)
+
 proc addPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
   t.withTree(VarS, NoLineInfo):
     t.addIdent("__dokime_stmt")
@@ -122,6 +139,91 @@ proc addPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
       t.addIdent("__dokime_stmt")
       t.addIntLit(i + 1)
       t.addSubtree(paramCursor)
+
+proc addOptionalPredicate(t: var NifBuilder; paramIndex: int) =
+  t.withTree(CallX, NoLineInfo):
+    t.bindSym("optionalParamPresent")
+    t.addIdent(paramName(paramIndex))
+
+proc addVariantMask(t: var NifBuilder; input: QueryInput) =
+  t.withTree(VarS, NoLineInfo):
+    t.addIdent("__dokime_variant")
+    t.addEmptyNode3()
+    t.addIntLit(0)
+
+  for part in input.parsedSql.parts:
+    if part.optional:
+      let paramIndex = part.paramIndexes[0]
+      t.withTree(IfS, NoLineInfo):
+        t.withTree(ElifU, NoLineInfo):
+          t.addOptionalPredicate(paramIndex)
+          t.withTree(StmtsS, NoLineInfo):
+            t.withTree(CallX, NoLineInfo):
+              t.bindSym("includeVariantBit")
+              t.addIdent("__dokime_variant")
+              t.addIntLit(1 shl part.optionalIndex)
+
+proc addStmtVar(t: var NifBuilder) =
+  t.withTree(VarS, NoLineInfo):
+    t.addIdent("__dokime_stmt")
+    t.addEmptyNode3()
+    t.withTree(CallX, NoLineInfo):
+      t.bindSym("emptyStmt")
+
+proc addPrepareAssignment(t: var NifBuilder; input: QueryInput; sql: string) =
+  t.withTree(AsgnS, NoLineInfo):
+    t.addIdent("__dokime_stmt")
+    t.withTree(CallX, NoLineInfo):
+      t.bindSym("prepareStmt")
+      t.addSubtree(input.dbExpr)
+      t.addStrLit(sql)
+      t.addIntLit(sql.len)
+
+proc addBindForParam(t: var NifBuilder; paramIndex: int; spec: ParamSpec) =
+  t.withTree(CallX, NoLineInfo):
+    t.bindSym("bindNextParam")
+    t.addIdent("__dokime_stmt")
+    t.addIdent("__dokime_bind")
+    if spec.optionalPart < 0:
+      t.addIdent(paramName(paramIndex))
+    else:
+      t.withTree(CallX, NoLineInfo):
+        t.bindSym("optionalParamValue")
+        t.addIdent(paramName(paramIndex))
+
+proc addVariantBody(t: var NifBuilder; input: QueryInput; mask: int) =
+  let sql = input.parsedSql.renderVariant(mask)
+  t.addPrepareAssignment(input, sql)
+
+  t.withTree(VarS, NoLineInfo):
+    t.addIdent("__dokime_bind")
+    t.addEmptyNode3()
+    t.addIntLit(1)
+
+  for i, spec in input.parsedSql.params:
+    if spec.optionalPart < 0 or (mask and (1 shl spec.optionalPart)) != 0:
+      t.addBindForParam(i, spec)
+
+proc addVariantPredicate(t: var NifBuilder; mask: int) =
+  t.withTree(CallX, NoLineInfo):
+    t.bindSym("variantSelected")
+    t.addIdent("__dokime_variant")
+    t.addIntLit(mask)
+
+proc addDynamicPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
+  t.addParamLocals(input)
+  t.addVariantMask(input)
+  t.addStmtVar()
+
+  t.withTree(IfS, NoLineInfo):
+    for mask in 1..<input.parsedSql.variantCount:
+      t.withTree(ElifU, NoLineInfo):
+        t.addVariantPredicate(mask)
+        t.withTree(StmtsS, NoLineInfo):
+          t.addVariantBody(input, mask)
+    t.withTree(ElseU, NoLineInfo):
+      t.withTree(StmtsS, NoLineInfo):
+        t.addVariantBody(input, 0)
 
 proc inferNullable(db: sqlite3.DbConn; stmt: sqlite3.Stmt; col: int): bool =
   let tableName = sqlite3_column_table_name(stmt, col.cint)
@@ -141,6 +243,17 @@ proc inferNullable(db: sqlite3.DbConn; stmt: sqlite3.Stmt; col: int): bool =
     result = true
   else:
     result = notNull == 0 and primaryKey == 0
+
+proc readSqlLiteral(node: NifCursor; sql: var string): bool =
+  if node.kind == StringLit:
+    sql = node.stringValue
+    return true
+
+  if node.kind == ParLe and node.exprKind == SufX:
+    var child = firstChild(node)
+    if child.hasMore and child.kind == StringLit:
+      sql = child.stringValue
+      result = true
 
 proc validateSql(sql: string): CacheEntry =
   var dbPath = getEnv("DOKIME_DATABASE_PATH")
@@ -180,10 +293,29 @@ proc validateSql(sql: string): CacheEntry =
   writeCache(sql, columns, params)
   result = CacheEntry(columns: columns, params: params)
 
+proc validateVariants(parsed: ParsedSql): Validation =
+  var expectedColumns: seq[ColumnMeta] = @[]
+
+  for mask in 0..<parsed.variantCount:
+    let sql = parsed.renderVariant(mask)
+    let entry = validateSql(sql)
+    if entry.error.len > 0:
+      return Validation(error: entry.error & " in optional SQL variant: " & sql)
+    if entry.params != parsed.variantParamCount(mask):
+      return Validation(error: "parameter count mismatch in optional SQL variant")
+
+    if mask == 0:
+      expectedColumns = entry.columns
+    elif not sameColumns(expectedColumns, entry.columns):
+      return Validation(error: "optional SQL variants must return the same columns")
+
+  result = Validation(columns: expectedColumns)
+
 proc parseQueryInput(inp: NifCursor; mode: QueryMode): QueryInput =
   result = QueryInput(
     dbExpr: inp,
     sql: "",
+    parsedSql: ParsedSql(parts: @[], params: @[], optionalCount: 0, error: ""),
     params: @[],
     bindCount: 0,
     hasSql: false,
@@ -200,8 +332,9 @@ proc parseQueryInput(inp: NifCursor; mode: QueryMode): QueryInput =
     of 0:
       result.dbExpr = child
     of 1:
-      if child.kind == StringLit:
-        result.sql = child.stringValue
+      var sql = ""
+      if readSqlLiteral(child, sql):
+        result.sql = sql
         result.hasSql = true
       else:
         result.error = "dokime: second argument must be a SQL string literal"
@@ -214,6 +347,12 @@ proc parseQueryInput(inp: NifCursor; mode: QueryMode): QueryInput =
   if result.error.len == 0 and not result.hasSql:
     result.error = "dokime: expected " & $mode & "(db, \"SQL\", params...)"
     result.errorAt = inp.info
+  elif result.error.len == 0:
+    let parsed = parseDynamicSql(result.sql)
+    if parsed.error.len > 0:
+      result.error = "dokime: " & parsed.error
+    else:
+      result.parsedSql = parsed
 
 proc buildRowTree(
   input: QueryInput;
@@ -224,7 +363,10 @@ proc buildRowTree(
   result.withTree(BlockS, input.errorAt):
     result.addEmptyNode()
     result.withTree(StmtsS, input.errorAt):
-      result.addPrepareAndBinds(input)
+      if input.parsedSql.hasDynamicParts:
+        result.addDynamicPrepareAndBinds(input)
+      else:
+        result.addPrepareAndBinds(input)
       case mode
       of qmRows:
         result.withTree(CallX, NoLineInfo):
@@ -298,7 +440,10 @@ proc buildCommandTree(input: QueryInput): NifBuilder =
   result.withTree(BlockS, input.errorAt):
     result.addEmptyNode()
     result.withTree(StmtsS, input.errorAt):
-      result.addPrepareAndBinds(input)
+      if input.parsedSql.hasDynamicParts:
+        result.addDynamicPrepareAndBinds(input)
+      else:
+        result.addPrepareAndBinds(input)
 
       result.withTree(CallX, NoLineInfo):
         result.bindSym("execStmt")
@@ -310,18 +455,27 @@ proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
   if query.error.len > 0:
     result = errorTree(query.error, query.errorAt)
   else:
-    let cache = validateSql(query.sql)
-    if cache.error.len > 0:
-      result = errorTree("dokime: " & cache.error, query.errorAt)
-    elif cache.params != query.params.len:
-      result = errorTree("dokime: expected " & $cache.params &
+    var validation: Validation
+    var expectedParams = 0
+    if query.parsedSql.hasDynamicParts:
+      validation = validateVariants(query.parsedSql)
+      expectedParams = query.parsedSql.expectedParamCount
+    else:
+      let cache = validateSql(query.sql)
+      validation = Validation(columns: cache.columns, error: cache.error)
+      expectedParams = cache.params
+
+    if validation.error.len > 0:
+      result = errorTree("dokime: " & validation.error, query.errorAt)
+    elif expectedParams != query.params.len:
+      result = errorTree("dokime: expected " & $expectedParams &
           " SQL parameter(s), got " & $query.params.len, query.errorAt)
-    elif cache.columns.len == 0 and mode == qmExec:
+    elif validation.columns.len == 0 and mode == qmExec:
       result = buildCommandTree(query)
-    elif cache.columns.len == 0:
+    elif validation.columns.len == 0:
       result = errorTree("dokime: " & $mode &
           " requires row-returning SQL; use exec for command SQL", query.errorAt)
     elif mode == qmExec:
       result = errorTree("dokime: exec requires command SQL with no result columns", query.errorAt)
     else:
-      result = buildRowTree(query, cache.columns, mode)
+      result = buildRowTree(query, validation.columns, mode)
