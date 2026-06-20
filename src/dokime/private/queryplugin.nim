@@ -270,6 +270,18 @@ proc emitPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
 # Optional-variant validation
 # ---------------------------------------------------------------------------
 
+func sameColumns(a, b: seq[ColumnMeta]): bool =
+  if a.len != b.len:
+    return false
+  for i in 0..<a.len:
+    if a[i].name != b[i].name:
+      return false
+    if a[i].kind != b[i].kind:
+      return false
+    if a[i].nullable != b[i].nullable:
+      return false
+  result = true
+
 proc validateDynamicSql(parsed: ParsedSql): QueryCheck =
   var expectedColumns: seq[ColumnMeta] = @[]
 
