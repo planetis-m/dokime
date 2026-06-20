@@ -23,11 +23,6 @@ type
 func hasDynamicParts*(sql: ParsedSql): bool =
   result = sql.clauseCount > 0
 
-func sqlSlice(sql: string; first, last: int): string =
-  result = ""
-  if first <= last:
-    result = substr(sql, first, last)
-
 func skipStringLiteral(sql: string; start: int): int =
   result = start + 1
   while result < sql.len:
@@ -56,8 +51,7 @@ proc addPart(parsed: var ParsedSql; text: string; isOptional: bool;
         let paramIndex = paramBase + paramIndexes.len
         paramIndexes.add paramIndex
         parsed.params.add ParamSpec(
-          clauseIndex: if isOptional: clauseIndex else: -1
-        )
+          clauseIndex: if isOptional: clauseIndex else: -1)
       inc i
 
   if isOptional and paramIndexes.len != 1:
@@ -69,8 +63,7 @@ proc addPart(parsed: var ParsedSql; text: string; isOptional: bool;
     text: text,
     isOptional: isOptional,
     clauseIndex: clauseIndex,
-    paramIndexes: paramIndexes
-  )
+    paramIndexes: paramIndexes)
 
 func findOptionalClose(sql: string; start: int; error: var string): int =
   result = start + 1
@@ -100,14 +93,14 @@ proc parseDynamicSql*(sql: string): ParsedSql =
     of '\'':
       i = sql.skipStringLiteral(i)
     of '[':
-      result.addPart(sql.sqlSlice(textStart, i - 1), false, -1)
+      result.addPart(substr(sql, textStart, i - 1), false, -1)
 
       let close = sql.findOptionalClose(i, result.error)
       if close < 0:
         return
 
       let clauseIndex = result.clauseCount
-      result.addPart(sql.sqlSlice(i + 1, close - 1), true, clauseIndex)
+      result.addPart(substr(sql, i + 1, close - 1), true, clauseIndex)
       inc result.clauseCount
       i = close + 1
       textStart = i
@@ -118,11 +111,10 @@ proc parseDynamicSql*(sql: string): ParsedSql =
       inc i
 
   if result.error.len == 0:
-    result.addPart(sql.sqlSlice(textStart, sql.len - 1), false, -1)
+    result.addPart(substr(sql, textStart, sql.len - 1), false, -1)
 
   if result.clauseCount > MaxOptionalParts:
-    result.error = "optional SQL blocks are limited to " & $MaxOptionalParts &
-      " per query"
+    result.error = "optional SQL blocks are limited to " & $MaxOptionalParts & " per query"
 
 func variantCount*(sql: ParsedSql): int =
   result = 1 shl sql.clauseCount
