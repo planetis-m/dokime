@@ -90,7 +90,7 @@ DOKIME_DATABASE_PATH= nimony c -r myapp.nim
 |----------------------------------------|----------------------------------|
 | `SELECT ... FROM no_such_table`        | Compile error: `no such table`   |
 | `SELECT wrong_column FROM users`       | Compile error: `no such column`  |
-| `SELEC id FROM users`                  | Compile error (SQLite parser)    |
+| `SELECT id FROM users`                 | Compile error (SQLite parser)    |
 | Using `row.id` as a `string`           | Compile error: `type mismatch`   |
 
 ## Commands
