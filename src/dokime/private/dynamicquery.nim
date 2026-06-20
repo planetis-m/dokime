@@ -77,7 +77,7 @@ func findOptionalClose(sql: string; start: int): (int, string) =
   return (-1, "unterminated optional SQL block")
 
 proc parseDynamicSql*(sql: string): ParsedSql =
-  result = ParsedSql(parts: @[], params: @[], clauseCount: 0, error: "")
+  result = default(ParsedSql)
   var
     i = 0
     textStart = 0
