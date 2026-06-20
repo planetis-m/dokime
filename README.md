@@ -124,6 +124,8 @@ SQLite reports no result columns; use `query()` or `rows()` for `INSERT ...
 RETURNING`, `UPDATE ... RETURNING`, CTEs, and any other statement that returns
 columns.
 
+`exec()` also accepts `Opt[T]` parameters and binds `none` as SQL `NULL`.
+
 ## Transactions
 
 Use `begin()` to create a transaction handle. The same compile-time

@@ -224,6 +224,9 @@ proc bindText(stmt: sqlite3.Stmt; idx: int; value: string) {.raises.} =
 proc bindFloat64(stmt: sqlite3.Stmt; idx: int; value: float64) {.raises.} =
   checkSqlite(sqlite3_bind_double(stmt, idx.cint, value))
 
+proc bindNull*(stmt: sqlite3.Stmt; idx: int) {.raises.} =
+  checkSqlite(sqlite3_bind_null(stmt, idx.cint))
+
 proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: int64) {.raises.} =
   bindInt64(stmt, idx, value)
 
@@ -232,6 +235,24 @@ proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: string) {.raises.} =
 
 proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: float64) {.raises.} =
   bindFloat64(stmt, idx, value)
+
+proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: Opt[int64]) {.raises.} =
+  if value.isSome:
+    bindInt64(stmt, idx, value.unsafeGet)
+  else:
+    bindNull(stmt, idx)
+
+proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: Opt[string]) {.raises.} =
+  if value.isSome:
+    bindText(stmt, idx, value.unsafeGet)
+  else:
+    bindNull(stmt, idx)
+
+proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: Opt[float64]) {.raises.} =
+  if value.isSome:
+    bindFloat64(stmt, idx, value.unsafeGet)
+  else:
+    bindNull(stmt, idx)
 
 proc emptyStmt*(): sqlite3.Stmt =
   result = nil
@@ -245,6 +266,18 @@ proc bindNextParam*(stmt: sqlite3.Stmt; idx: var int; value: string) {.raises.} 
   inc idx
 
 proc bindNextParam*(stmt: sqlite3.Stmt; idx: var int; value: float64) {.raises.} =
+  bindParam(stmt, idx, value)
+  inc idx
+
+proc bindNextParam*(stmt: sqlite3.Stmt; idx: var int; value: Opt[int64]) {.raises.} =
+  bindParam(stmt, idx, value)
+  inc idx
+
+proc bindNextParam*(stmt: sqlite3.Stmt; idx: var int; value: Opt[string]) {.raises.} =
+  bindParam(stmt, idx, value)
+  inc idx
+
+proc bindNextParam*(stmt: sqlite3.Stmt; idx: var int; value: Opt[float64]) {.raises.} =
   bindParam(stmt, idx, value)
   inc idx
 
@@ -303,7 +336,7 @@ proc assignColumn(field: var Opt[float64]; stmt: sqlite3.Stmt; col: int) =
 proc decodeRow[T: tuple](rows: RowSet[T]): T =
   result = rows.rowShape
   var col = 0
-  for _, field in fieldPairs(result):
+  for field in fields(result):
     assignColumn(field, rows.stmt, col)
     inc col
 

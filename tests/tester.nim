@@ -21,6 +21,7 @@ const Positive = [
   "tdynamicclauses.nim",
   "tquerycardinality.nim",
   "tnullable.nim",
+  "tnullableparams.nim",
   "trows.nim"
 ]
 
@@ -40,7 +41,8 @@ proc ensureValidateDb() =
     return
   let schema = [
     "CREATE TABLE users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT",
-    "CREATE TABLE profiles (id INTEGER NOT NULL, name TEXT NOT NULL, nickname TEXT, score REAL) STRICT"
+    "CREATE TABLE profiles (id INTEGER NOT NULL, name TEXT NOT NULL, nickname TEXT, score REAL) STRICT",
+    "CREATE TABLE notes (id INTEGER NOT NULL, title TEXT NOT NULL, body TEXT, tag TEXT) STRICT"
   ]
   for stmt in schema:
     let rc = execShellCmd("sqlite3 " & ValidateDb & " '" & stmt & "'")

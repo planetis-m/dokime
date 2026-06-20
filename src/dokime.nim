@@ -53,6 +53,7 @@ template exec*(): untyped {.varargs, plugin: "dokime/private/plugins/exec".}
   ## Compile-time validated SQL command with no result columns.
   ##
   ## Use for INSERT, UPDATE, DELETE, DDL, BEGIN, COMMIT, and ROLLBACK.
+  ## `Opt[T]` parameters bind `none` as SQL `NULL`.
   ## Returns an `ExecResult` with `.changes` (rows affected) and
   ## `.lastRowid` fields.
   ##
