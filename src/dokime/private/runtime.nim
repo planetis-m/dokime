@@ -45,7 +45,7 @@ proc `=wasMoved`(tx: var Transaction) =
 proc `=copy`(dest: var Transaction; src: Transaction) {.error.}
 proc `=dup`(tx: Transaction): Transaction {.error.}
 
-proc sqliteErrorCode(rc: cint): ErrorCode =
+proc toErrorCode(rc: cint): ErrorCode =
   case rc
   of SQLITE_OK, SQLITE_ROW, SQLITE_DONE:
     result = Success
@@ -85,7 +85,7 @@ proc sqliteErrorCode(rc: cint): ErrorCode =
     result = Failure
 
 proc checkSqlite(rc: cint) {.raises.} =
-  let err = sqliteErrorCode(rc)
+  let err = toErrorCode(rc)
   if err != Success:
     raise err
 
@@ -134,17 +134,15 @@ proc databaseHandle(db: Database): sqlite3.DbConn {.raises.} =
 proc databaseHandle(tx: Transaction): sqlite3.DbConn {.raises.} =
   result = requireActiveTransaction(tx)
 
-proc connectCString(path: cstring): sqlite3.DbConn {.raises.} =
+proc connect*(path: sink string): Database {.raises.} =
   var db: sqlite3.DbConn = nil
-  let rc = sqlite3_open_v2(path, db, cint(SQLITE_OPEN_READWRITE or SQLITE_OPEN_CREATE), nil)
+  let rc = sqlite3_open_v2(toCString(path), db,
+      cint(SQLITE_OPEN_READWRITE or SQLITE_OPEN_CREATE), nil)
   if rc != SQLITE_OK:
     if db != nil:
       discard sqlite3_close_v2(db)
     checkSqlite(rc)
-  result = db
-
-proc connect*(path: sink string): Database {.raises.} =
-  result = Database(conn: connectCString(toCString(path)), txActive: false)
+  result = Database(conn: db, txActive: false)
 
 proc close*(db: sqlite3.DbConn) {.raises.} =
   checkSqlite(sqlite3_close_v2(db))
