@@ -1,21 +1,7 @@
 ## Runtime helpers used only by generated optional-clause query code.
 
-import std/opt
-
 import runtime
 import ".." / sqlite3
-
-proc optionalParamPresent*[T](value: Opt[T]): bool {.raises: [].} =
-  result = value.isSome
-
-proc optionalParamValue*[T](value: Opt[T]): T {.raises.} =
-  result = value.unsafeGet
-
-proc includeVariantBit*(variant: var int; bit: int) {.raises: [].} =
-  variant = variant or bit
-
-proc variantSelected*(variant, expected: int): bool {.raises: [].} =
-  result = variant == expected
 
 proc emptyStmt*(): sqlite3.Stmt {.raises: [].} =
   result = nil

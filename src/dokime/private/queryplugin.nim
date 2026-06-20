@@ -142,8 +142,19 @@ proc addPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
 
 proc addOptionalPredicate(t: var NifBuilder; paramIndex: int) =
   t.withTree(CallX, NoLineInfo):
-    t.bindSym("optionalParamPresent")
+    t.bindSym("isSome")
     t.addIdent(paramName(paramIndex))
+
+proc addNativeIntType(t: var NifBuilder) =
+  t.addIdent("int")
+
+proc addVariantBitAssign(t: var NifBuilder; bit: int) =
+  t.withTree(AsgnS, NoLineInfo):
+    t.addIdent("__dokime_variant")
+    t.withTree(BitorX, NoLineInfo):
+      t.addNativeIntType()
+      t.addIdent("__dokime_variant")
+      t.addIntLit(bit)
 
 proc addVariantMask(t: var NifBuilder; input: QueryInput) =
   t.withTree(VarS, NoLineInfo):
@@ -158,10 +169,7 @@ proc addVariantMask(t: var NifBuilder; input: QueryInput) =
         t.withTree(ElifU, NoLineInfo):
           t.addOptionalPredicate(paramIndex)
           t.withTree(StmtsS, NoLineInfo):
-            t.withTree(CallX, NoLineInfo):
-              t.bindSym("includeVariantBit")
-              t.addIdent("__dokime_variant")
-              t.addIntLit(1 shl part.clauseIndex)
+            t.addVariantBitAssign(1 shl part.clauseIndex)
 
 proc addStmtVar(t: var NifBuilder) =
   t.withTree(VarS, NoLineInfo):
@@ -188,7 +196,7 @@ proc addBindForParam(t: var NifBuilder; paramIndex: int; spec: ParamSpec) =
       t.addIdent(paramName(paramIndex))
     else:
       t.withTree(CallX, NoLineInfo):
-        t.bindSym("optionalParamValue")
+        t.bindSym("unsafeGet")
         t.addIdent(paramName(paramIndex))
 
 proc addVariantBody(t: var NifBuilder; input: QueryInput; mask: int) =
@@ -205,8 +213,8 @@ proc addVariantBody(t: var NifBuilder; input: QueryInput; mask: int) =
       t.addBindForParam(i, spec)
 
 proc addVariantPredicate(t: var NifBuilder; mask: int) =
-  t.withTree(CallX, NoLineInfo):
-    t.bindSym("variantSelected")
+  t.withTree(EqX, NoLineInfo):
+    t.addNativeIntType()
     t.addIdent("__dokime_variant")
     t.addIntLit(mask)
 
