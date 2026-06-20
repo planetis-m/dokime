@@ -152,7 +152,7 @@ proc addVariantMask(t: var NifBuilder; input: QueryInput) =
     t.addIntLit(0)
 
   for part in input.parsedSql.parts:
-    if part.optional:
+    if part.isOptional:
       let paramIndex = part.paramIndexes[0]
       t.withTree(IfS, NoLineInfo):
         t.withTree(ElifU, NoLineInfo):
@@ -161,7 +161,7 @@ proc addVariantMask(t: var NifBuilder; input: QueryInput) =
             t.withTree(CallX, NoLineInfo):
               t.bindSym("includeVariantBit")
               t.addIdent("__dokime_variant")
-              t.addIntLit(1 shl part.optionalIndex)
+              t.addIntLit(1 shl part.clauseIndex)
 
 proc addStmtVar(t: var NifBuilder) =
   t.withTree(VarS, NoLineInfo):
@@ -184,7 +184,7 @@ proc addBindForParam(t: var NifBuilder; paramIndex: int; spec: ParamSpec) =
     t.bindSym("bindNextParam")
     t.addIdent("__dokime_stmt")
     t.addIdent("__dokime_bind")
-    if spec.optionalPart < 0:
+    if spec.clauseIndex < 0:
       t.addIdent(paramName(paramIndex))
     else:
       t.withTree(CallX, NoLineInfo):
@@ -201,7 +201,7 @@ proc addVariantBody(t: var NifBuilder; input: QueryInput; mask: int) =
     t.addIntLit(1)
 
   for i, spec in input.parsedSql.params:
-    if spec.optionalPart < 0 or (mask and (1 shl spec.optionalPart)) != 0:
+    if spec.clauseIndex < 0 or (mask and (1 shl spec.clauseIndex)) != 0:
       t.addBindForParam(i, spec)
 
 proc addVariantPredicate(t: var NifBuilder; mask: int) =
@@ -300,7 +300,8 @@ proc validateVariants(parsed: ParsedSql): Validation =
     let sql = parsed.renderVariant(mask)
     let entry = validateSql(sql)
     if entry.error.len > 0:
-      return Validation(error: entry.error & " in optional SQL variant: " & sql)
+      return Validation(error: entry.error & " in optional SQL variant " &
+        $mask & ": " & sql)
     if entry.params != parsed.variantParamCount(mask):
       return Validation(error: "parameter count mismatch in optional SQL variant")
 
@@ -315,7 +316,7 @@ proc parseQueryInput(inp: NifCursor; mode: QueryMode): QueryInput =
   result = QueryInput(
     dbExpr: inp,
     sql: "",
-    parsedSql: ParsedSql(parts: @[], params: @[], optionalCount: 0, error: ""),
+    parsedSql: ParsedSql(parts: @[], params: @[], clauseCount: 0, error: ""),
     params: @[],
     bindCount: 0,
     hasSql: false,

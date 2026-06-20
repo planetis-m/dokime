@@ -42,6 +42,18 @@ proc main() {.raises.} =
     let user = query(db, "SELECT id, name FROM users [WHERE name = ?]", name)
     assert user.id == 1
 
+  block sql_literal_tokens_are_not_clause_syntax:
+    let minAge = some(35'i64)
+    var names: seq[string] = @[]
+    for user in rows(db, """
+      SELECT id, name FROM users
+      WHERE '[' <> ']'
+        [AND name <> '?' AND age >= ?]
+      ORDER BY id
+      """, minAge):
+      names.add user.name
+    assert names == @["Ada", "Grace"]
+
   closeDatabase(db)
 
 try:
