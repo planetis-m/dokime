@@ -236,21 +236,9 @@ proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: string) {.raises.} =
 proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: float64) {.raises.} =
   bindFloat64(stmt, idx, value)
 
-proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: Opt[int64]) {.raises.} =
+proc bindParam*[T](stmt: sqlite3.Stmt; idx: int; value: Opt[T]) {.raises, untyped.} =
   if value.isSome:
-    bindInt64(stmt, idx, value.unsafeGet)
-  else:
-    bindNull(stmt, idx)
-
-proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: Opt[string]) {.raises.} =
-  if value.isSome:
-    bindText(stmt, idx, value.unsafeGet)
-  else:
-    bindNull(stmt, idx)
-
-proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: Opt[float64]) {.raises.} =
-  if value.isSome:
-    bindFloat64(stmt, idx, value.unsafeGet)
+    bindParam(stmt, idx, value.unsafeGet)
   else:
     bindNull(stmt, idx)
 
@@ -269,15 +257,7 @@ proc bindNextParam*(stmt: sqlite3.Stmt; idx: var int; value: float64) {.raises.}
   bindParam(stmt, idx, value)
   inc idx
 
-proc bindNextParam*(stmt: sqlite3.Stmt; idx: var int; value: Opt[int64]) {.raises.} =
-  bindParam(stmt, idx, value)
-  inc idx
-
-proc bindNextParam*(stmt: sqlite3.Stmt; idx: var int; value: Opt[string]) {.raises.} =
-  bindParam(stmt, idx, value)
-  inc idx
-
-proc bindNextParam*(stmt: sqlite3.Stmt; idx: var int; value: Opt[float64]) {.raises.} =
+proc bindNextParam*[T](stmt: sqlite3.Stmt; idx: var int; value: Opt[T]) {.raises, untyped.} =
   bindParam(stmt, idx, value)
   inc idx
 

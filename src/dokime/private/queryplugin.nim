@@ -439,7 +439,8 @@ proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
         return errorTree("dokime: second argument must be a SQL string literal", child.info)
     else:
       params.add(child)
-    skip child; inc argIndex
+    skip child
+    inc argIndex
 
   if sql.len == 0:
     return errorTree("dokime: expected " & $mode & "(db, \"SQL\", params...)", inp.info)
