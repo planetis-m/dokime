@@ -233,6 +233,21 @@ proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: string) {.raises.} =
 proc bindParam*(stmt: sqlite3.Stmt; idx: int; value: float64) {.raises.} =
   bindFloat64(stmt, idx, value)
 
+proc emptyStmt*(): sqlite3.Stmt =
+  result = nil
+
+proc bindNextParam*(stmt: sqlite3.Stmt; idx: var int; value: int64) {.raises.} =
+  bindParam(stmt, idx, value)
+  inc idx
+
+proc bindNextParam*(stmt: sqlite3.Stmt; idx: var int; value: string) {.raises.} =
+  bindParam(stmt, idx, value)
+  inc idx
+
+proc bindNextParam*(stmt: sqlite3.Stmt; idx: var int; value: float64) {.raises.} =
+  bindParam(stmt, idx, value)
+  inc idx
+
 proc columnInt64*(stmt: sqlite3.Stmt; col: int): int64 =
   result = sqlite3_column_int64(stmt, col.cint)
 

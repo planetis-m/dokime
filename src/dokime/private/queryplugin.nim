@@ -8,7 +8,7 @@
 import std / opt
 
 import plugins
-import cacheio, dynamicquery, dynamicruntime, runtime, sqlvalidate
+import cacheio, dynamicquery, runtime, sqlvalidate
 import ".." / sqlite3
 
 type
@@ -259,40 +259,6 @@ proc emitPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
     t.emitStaticPrepareAndBinds(input)
 
 # ---------------------------------------------------------------------------
-# Optional-variant validation
-# ---------------------------------------------------------------------------
-
-func sameColumns(a, b: seq[ColumnMeta]): bool =
-  if a.len != b.len:
-    return false
-  for i in 0..<a.len:
-    if a[i].name != b[i].name:
-      return false
-    if a[i].kind != b[i].kind:
-      return false
-    if a[i].nullable != b[i].nullable:
-      return false
-  result = true
-
-proc validateDynamicSql(parsed: ParsedSql): SqlMeta =
-  var expectedColumns: seq[ColumnMeta] = @[]
-
-  for mask in 0..<parsed.variantCount:
-    let sql = parsed.renderVariant(mask)
-    let entry = validateSql(sql)
-    if entry.error.len > 0:
-      return SqlMeta(error: entry.error & " in optional SQL variant " & $mask & ": " & sql)
-    if entry.params != parsed.variantParamCount(mask):
-      return SqlMeta(error: "parameter count mismatch in optional SQL variant")
-
-    if mask == 0:
-      expectedColumns = entry.columns
-    elif not sameColumns(expectedColumns, entry.columns):
-      return SqlMeta(error: "optional SQL variants must return the same columns")
-
-  result = SqlMeta(columns: expectedColumns, params: parsed.params.len)
-
-# ---------------------------------------------------------------------------
 # SQL literal reading
 # ---------------------------------------------------------------------------
 
@@ -456,11 +422,6 @@ proc buildCommandTree(input: QueryInput; info: LineInfo): NifBuilder =
         result.addSubtree(input.dbExpr)
         result.addIdent("__dokime_stmt")
 
-proc validateQuery(query: QueryInput): SqlMeta =
-  if query.parsedSql.hasDynamicParts:
-    result = validateDynamicSql(query.parsedSql)
-  else:
-    result = validateSql(query.sql)
 
 proc resultShapeError(mode: QueryMode; columns: seq[ColumnMeta]): string =
   if columns.len == 0:
@@ -500,7 +461,8 @@ proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
     return errorTree("dokime: " & parsed.error, inp.info)
 
   let query = QueryInput(dbExpr: dbExpr, sql: sql, parsedSql: parsed, params: params)
-  let check = validateQuery(query)
+  let check = if parsed.hasDynamicParts: validateDynamicSql(parsed)
+              else: validateSql(sql)
   let shapeError = resultShapeError(mode, check.columns)
   if check.error.len > 0:
     return errorTree("dokime: " & check.error, inp.info)

@@ -9,7 +9,6 @@
 ## ```
 
 import std/opt
-import dokime/private/dynamicruntime
 import dokime/private/runtime
 
 export opt, runtime

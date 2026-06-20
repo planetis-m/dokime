@@ -7,10 +7,10 @@
 
 import std / envvars
 
-import cacheio
+import cacheio, dynamicquery
 import ".." / sqlite3
 
-proc toColumnKind*(typeName: string): ColumnKind =
+proc toColumnKind(typeName: string): ColumnKind =
   case typeName
   of "INTEGER", "INT": ckInteger
   of "TEXT", "STRING": ckText
@@ -18,7 +18,7 @@ proc toColumnKind*(typeName: string): ColumnKind =
   of "BLOB": ckBlob
   else: ckNull
 
-proc inferNullable*(db: sqlite3.DbConn; stmt: sqlite3.Stmt; col: int): bool =
+proc inferNullable(db: sqlite3.DbConn; stmt: sqlite3.Stmt; col: int): bool =
   let tableName = sqlite3_column_table_name(stmt, col.cint)
   let originName = sqlite3_column_origin_name(stmt, col.cint)
   if tableName == nil:
@@ -67,10 +67,39 @@ proc validateSql*(sql: string): SqlMeta =
     columns.add ColumnMeta(
       name: colName,
       kind: toColumnKind(typeStr),
-      nullable: inferNullable(db, stmt, i)
-    )
+      nullable: inferNullable(db, stmt, i))
   discard sqlite3_finalize(stmt)
   discard sqlite3_close_v2(db)
 
   writeCache(sql, columns, params)
   result = SqlMeta(columns: columns, params: params)
+
+func sameColumns(a, b: seq[ColumnMeta]): bool =
+  if a.len != b.len:
+    return false
+  for i in 0..<a.len:
+    if a[i].name != b[i].name:
+      return false
+    if a[i].kind != b[i].kind:
+      return false
+    if a[i].nullable != b[i].nullable:
+      return false
+  result = true
+
+proc validateDynamicSql*(parsed: ParsedSql): SqlMeta =
+  var expectedColumns: seq[ColumnMeta] = @[]
+
+  for mask in 0..<parsed.variantCount:
+    let sql = parsed.renderVariant(mask)
+    let entry = validateSql(sql)
+    if entry.error.len > 0:
+      return SqlMeta(error: entry.error & " in optional SQL variant " & $mask & ": " & sql)
+    if entry.params != parsed.variantParamCount(mask):
+      return SqlMeta(error: "parameter count mismatch in optional SQL variant")
+
+    if mask == 0:
+      expectedColumns = entry.columns
+    elif not sameColumns(expectedColumns, entry.columns):
+      return SqlMeta(error: "optional SQL variants must return the same columns")
+
+  result = SqlMeta(columns: expectedColumns, params: parsed.params.len)
