@@ -277,23 +277,23 @@ func sameColumns(a, b: seq[ColumnMeta]): bool =
       return false
   result = true
 
-proc validateDynamicSql(parsed: ParsedSql): CacheEntry =
+proc validateDynamicSql(parsed: ParsedSql): SqlMeta =
   var expectedColumns: seq[ColumnMeta] = @[]
 
   for mask in 0..<parsed.variantCount:
     let sql = parsed.renderVariant(mask)
     let entry = validateSql(sql)
     if entry.error.len > 0:
-      return CacheEntry(error: entry.error & " in optional SQL variant " & $mask & ": " & sql)
+      return SqlMeta(error: entry.error & " in optional SQL variant " & $mask & ": " & sql)
     if entry.params != parsed.variantParamCount(mask):
-      return CacheEntry(error: "parameter count mismatch in optional SQL variant")
+      return SqlMeta(error: "parameter count mismatch in optional SQL variant")
 
     if mask == 0:
       expectedColumns = entry.columns
     elif not sameColumns(expectedColumns, entry.columns):
-      return CacheEntry(error: "optional SQL variants must return the same columns")
+      return SqlMeta(error: "optional SQL variants must return the same columns")
 
-  result = CacheEntry(columns: expectedColumns, params: parsed.params.len)
+  result = SqlMeta(columns: expectedColumns, params: parsed.params.len)
 
 # ---------------------------------------------------------------------------
 # Query input parsing
@@ -494,7 +494,7 @@ proc buildCommandTree(input: QueryInput): NifBuilder =
         result.addSubtree(input.dbExpr)
         result.addIdent("__dokime_stmt")
 
-proc validateQuery(query: QueryInput): CacheEntry =
+proc validateQuery(query: QueryInput): SqlMeta =
   if query.parsedSql.hasDynamicParts:
     result = validateDynamicSql(query.parsedSql)
   else:

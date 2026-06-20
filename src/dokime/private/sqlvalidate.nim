@@ -37,7 +37,7 @@ proc inferNullable*(db: sqlite3.DbConn; stmt: sqlite3.Stmt; col: int): bool =
   else:
     result = notNull == 0 and primaryKey == 0
 
-proc validateSql*(sql: string): CacheEntry =
+proc validateSql*(sql: string): SqlMeta =
   var dbPath = getEnv("DOKIME_DATABASE_PATH")
   if dbPath.len == 0:
     result = readCache(sql)
@@ -47,7 +47,7 @@ proc validateSql*(sql: string): CacheEntry =
   let rc = sqlite3_open_v2(toCString(dbPath), db, SQLITE_OPEN_READWRITE, nil)
   if rc != SQLITE_OK:
     let msg = if db != nil: fromCString(sqlite3_errmsg(db)) else: "open failed"
-    return CacheEntry(error: "cannot open database: " & msg)
+    return SqlMeta(error: "cannot open database: " & msg)
 
   var stmt: sqlite3.Stmt = nil
   var s = sql
@@ -55,7 +55,7 @@ proc validateSql*(sql: string): CacheEntry =
   if prepRc != SQLITE_OK:
     let errMsg = fromCString(sqlite3_errmsg(db))
     discard sqlite3_close_v2(db)
-    return CacheEntry(error: errMsg)
+    return SqlMeta(error: errMsg)
 
   let params = sqlite3_bind_parameter_count(stmt).int
   let count = sqlite3_column_count(stmt)
@@ -73,4 +73,4 @@ proc validateSql*(sql: string): CacheEntry =
   discard sqlite3_close_v2(db)
 
   writeCache(sql, columns, params)
-  result = CacheEntry(columns: columns, params: params)
+  result = SqlMeta(columns: columns, params: params)
