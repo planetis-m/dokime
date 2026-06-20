@@ -25,7 +25,6 @@ template sqliteTransient(): pointer =
   cast[pointer](-1)
 
 proc `=copy`*[T: tuple](dest: var RowSet[T]; src: RowSet[T]) {.error.}
-
 proc `=dup`*[T: tuple](rs: RowSet[T]): RowSet[T] {.error.}
 
 proc `=destroy`(db: DatabaseObj) =
@@ -44,7 +43,6 @@ proc `=wasMoved`(tx: var Transaction) =
   tx.active = false
 
 proc `=copy`(dest: var Transaction; src: Transaction) {.error.}
-
 proc `=dup`(tx: Transaction): Transaction {.error.}
 
 proc sqliteErrorCode(rc: cint): ErrorCode =
@@ -336,8 +334,7 @@ proc execStmtForDb(db: sqlite3.DbConn; stmt: sqlite3.Stmt): SqlExecResult {.rais
 
   result = SqlExecResult(
     changes: resultChanges,
-    lastInsertRowid: resultLastInsertRowid
-  )
+    lastInsertRowid: resultLastInsertRowid)
 
 template execStmt*(target: untyped; stmt: sqlite3.Stmt): untyped =
   execStmtForDb(databaseHandle(target), stmt)

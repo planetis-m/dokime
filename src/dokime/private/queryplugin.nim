@@ -280,8 +280,7 @@ proc validateVariants(parsed: ParsedSql): Validation =
     let sql = parsed.renderVariant(mask)
     let entry = validateSql(sql)
     if entry.error.len > 0:
-      return Validation(error: entry.error & " in optional SQL variant " &
-        $mask & ": " & sql)
+      return Validation(error: entry.error & " in optional SQL variant " & $mask & ": " & sql)
     if entry.params != parsed.variantParamCount(mask):
       return Validation(error: "parameter count mismatch in optional SQL variant")
 
@@ -457,6 +456,10 @@ proc emitOneOrOptQuery(t: var NifBuilder; columns: seq[ColumnMeta]; mode: QueryM
 # Tree assembly and entry point
 # ---------------------------------------------------------------------------
 
+# (block
+#   (stmts
+#     PREPARE_AND_BINDS
+#     (call initRows __dokime_stmt DEFAULT_ROW) | ONE_OR_OPT_QUERY))
 proc buildRowTree(input: QueryInput; columns: seq[ColumnMeta];
     mode: QueryMode): NifBuilder =
   result = createTree()
@@ -472,6 +475,10 @@ proc buildRowTree(input: QueryInput; columns: seq[ColumnMeta];
       of qmExec:
         discard
 
+# (block
+#   (stmts
+#     PREPARE_AND_BINDS
+#     (call execStmt DB __dokime_stmt)))
 proc buildCommandTree(input: QueryInput): NifBuilder =
   result = createTree()
   result.withTree(BlockS, input.errorAt):
