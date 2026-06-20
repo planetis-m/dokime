@@ -467,14 +467,12 @@ proc validateQuery(query: QueryInput): QueryCheck =
   if query.parsedSql.hasDynamicParts:
     result = QueryCheck(
       validation: validateVariants(query.parsedSql),
-      expectedParams: query.parsedSql.expectedParamCount
-    )
+      expectedParams: query.parsedSql.expectedParamCount)
   else:
     let cache = validateSql(query.sql)
     result = QueryCheck(
       validation: Validation(columns: cache.columns, error: cache.error),
-      expectedParams: cache.params
-    )
+      expectedParams: cache.params)
 
 proc resultShapeError(mode: QueryMode; columns: seq[ColumnMeta]): string =
   if columns.len == 0:

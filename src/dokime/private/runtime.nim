@@ -24,6 +24,10 @@ type
 template sqliteTransient(): pointer =
   cast[pointer](-1)
 
+proc `=copy`*[T: tuple](dest: var RowSet[T]; src: RowSet[T]) {.error.}
+
+proc `=dup`*[T: tuple](rs: RowSet[T]): RowSet[T] {.error.}
+
 proc `=destroy`(db: DatabaseObj) {.raises: [].} =
   if db.conn != nil:
     if db.txActive:
@@ -40,6 +44,8 @@ proc `=wasMoved`(tx: var Transaction) {.raises: [].} =
   tx.active = false
 
 proc `=copy`(dest: var Transaction; src: Transaction) {.error.}
+
+proc `=dup`(tx: Transaction): Transaction {.error.}
 
 proc sqliteErrorCode(rc: cint): ErrorCode {.raises: [].} =
   case rc
@@ -167,13 +173,6 @@ proc rollback*(tx: var Transaction) {.raises.} =
   execSql(conn, cstring("ROLLBACK"))
   tx.db.txActive = false
   tx.active = false
-
-proc rollbackIfActive(tx: var Transaction) {.raises: [].} =
-  if tx.db != nil and tx.db.conn != nil and tx.active:
-    let rc = sqlite3_exec(tx.db.conn, cstring("ROLLBACK"), nil, nil, nil)
-    if rc == SQLITE_OK:
-      tx.db.txActive = false
-      tx.active = false
 
 proc savepoint*(tx: Transaction; name: string) {.raises.} =
   var sql = savepointSql(name, "SAVEPOINT")
