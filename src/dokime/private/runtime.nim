@@ -17,7 +17,6 @@ type
 
   Transaction* = object
     db: Database
-    active: bool
 
   Database* = ref DatabaseObj
 
@@ -36,13 +35,12 @@ proc `=wasMoved`(db: var DatabaseObj) =
   db.txActive = false
 
 proc `=destroy`(tx: Transaction) =
-  if tx.db != nil and tx.active and tx.db.conn != nil:
+  if tx.db != nil and tx.db.conn != nil:
     discard sqlite3_exec(tx.db.conn, cstring("ROLLBACK"), nil, nil, nil)
     tx.db.txActive = false
 
 proc `=wasMoved`(tx: var Transaction) =
   tx.db = nil
-  tx.active = false
 
 proc `=copy`(dest: var Transaction; src: Transaction) {.error.}
 proc `=dup`(tx: Transaction): Transaction {.error.}
@@ -102,7 +100,7 @@ proc requireOpenDatabase(db: Database): sqlite3.DbConn {.raises.} =
   result = db.conn
 
 proc requireActiveTransaction(tx: Transaction): sqlite3.DbConn {.raises.} =
-  if tx.db == nil or tx.db.conn == nil or not tx.active:
+  if tx.db == nil or tx.db.conn == nil:
     raise BadOperation
   result = tx.db.conn
 
@@ -125,7 +123,7 @@ proc savepointSql(name: string; keyword: string): string {.raises.} =
   result = keyword & " " & name
 
 proc isActive*(tx: Transaction): bool =
-  result = tx.db != nil and tx.db.conn != nil and tx.active
+  result = tx.db != nil and tx.db.conn != nil
 
 proc databaseHandle(db: sqlite3.DbConn): sqlite3.DbConn =
   result = db
@@ -158,19 +156,19 @@ proc begin*(db: Database): Transaction {.raises.} =
   let conn = requireOpenDatabase(db)
   execSql(conn, cstring("BEGIN"))
   db.txActive = true
-  result = Transaction(db: db, active: true)
+  result = Transaction(db: db)
 
 proc commit*(tx: var Transaction) {.raises.} =
   let conn = requireActiveTransaction(tx)
   execSql(conn, cstring("COMMIT"))
   tx.db.txActive = false
-  tx.active = false
+  tx.db = nil
 
 proc rollback*(tx: var Transaction) {.raises.} =
   let conn = requireActiveTransaction(tx)
   execSql(conn, cstring("ROLLBACK"))
   tx.db.txActive = false
-  tx.active = false
+  tx.db = nil
 
 proc savepoint*(tx: Transaction; name: string) {.raises.} =
   var sql = savepointSql(name, "SAVEPOINT")

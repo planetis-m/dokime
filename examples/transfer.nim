@@ -42,13 +42,13 @@ proc main() {.raises.} =
 
   echo "Before:"
   echo "  checking: " & $balance(db, "checking")
-  echo "  savings:   " & $balance(db, "savings")
+  echo "  savings:  " & $balance(db, "savings")
 
   transfer(db, "checking", "savings", 250'i64)
 
   echo "After transferring 250:"
   echo "  checking: " & $balance(db, "checking")
-  echo "  savings:   " & $balance(db, "savings")
+  echo "  savings:  " & $balance(db, "savings")
 
   # Optional row: queryOpt returns Opt instead of raising when nothing matches.
   let maybe = queryOpt(db, "SELECT id, note FROM accounts WHERE name = ?", "wallet")
