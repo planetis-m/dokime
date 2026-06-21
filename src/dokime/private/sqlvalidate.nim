@@ -52,33 +52,35 @@ func isKnownNotNull(colName: string): bool =
   else:
     result = false
 
-proc toColumnKind(typeName: string; colName: string): ColumnKind =
+proc toColumnKind(typeName: string): ColumnKind =
   case typeName
   of "INTEGER", "INT": result = ckInteger
   of "TEXT", "STRING": result = ckText
   of "REAL", "FLOAT", "DOUBLE": result = ckReal
   of "BLOB": result = ckBlob
-  else:
-    let n = colName.toLowerAscii
-    if n.startsWith("count(") or n.startsWith("exists(") or n.startsWith("random(") or
-       n.startsWith("row_number(") or n.startsWith("rank(") or
-       n.startsWith("dense_rank(") or n.startsWith("ntile("):
-      result = ckInteger
-    elif n.startsWith("percent_rank(") or n.startsWith("cume_dist("):
-      result = ckReal
-    elif n.startsWith("typeof(") or n.startsWith("quote("):
+  else: result = ckNull
+
+func inferExprKind(colName: string): ColumnKind =
+  let n = colName.toLowerAscii
+  if n.startsWith("count(") or n.startsWith("exists(") or n.startsWith("random(") or
+     n.startsWith("row_number(") or n.startsWith("rank(") or
+     n.startsWith("dense_rank(") or n.startsWith("ntile("):
+    result = ckInteger
+  elif n.startsWith("percent_rank(") or n.startsWith("cume_dist("):
+    result = ckReal
+  elif n.startsWith("typeof(") or n.startsWith("quote("):
+    result = ckText
+  elif n.startsWith("zeroblob(") or n.startsWith("randomblob("):
+    result = ckBlob
+  elif n == "current_date" or n == "current_time" or n == "current_timestamp":
+    result = ckText
+  elif isLiteral(colName):
+    if colName.strip.startsWith("'"):
       result = ckText
-    elif n.startsWith("zeroblob(") or n.startsWith("randomblob("):
-      result = ckBlob
-    elif n == "current_date" or n == "current_time" or n == "current_timestamp":
-      result = ckText
-    elif isLiteral(colName):
-      if colName.strip.startsWith("'"):
-        result = ckText
-      else:
-        result = ckInteger
     else:
-      result = ckNull
+      result = ckInteger
+  else:
+    result = ckNull
 
 proc inferNullable(db: sqlite3.DbConn; stmt: sqlite3.Stmt; col: int): bool =
   let tableName = sqlite3_column_table_name(stmt, col.cint)
@@ -130,9 +132,12 @@ proc validateSql*(sql: string): SqlMeta =
       if isValidIdent(colName): colName else: "col_" & $i
     let decltype = sqlite3_column_decltype(stmt, i.cint)
     let typeStr = if decltype != nil: fromCString(decltype) else: ""
+    var kind = toColumnKind(typeStr)
+    if kind == ckNull:
+      kind = inferExprKind(colName)
     columns.add ColumnMeta(
       name: displayName,
-      kind: toColumnKind(typeStr, colName),
+      kind: kind,
       nullable: inferNullable(db, stmt, i))
   discard sqlite3_finalize(stmt)
   discard sqlite3_close_v2(db)
