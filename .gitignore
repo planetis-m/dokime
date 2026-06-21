@@ -11,3 +11,4 @@ tests/tester
 tests/tester.exe
 tests/.nimony-cache/
 examples/.nimony-cache/
+nim.cfg
