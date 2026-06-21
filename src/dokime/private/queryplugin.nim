@@ -140,19 +140,9 @@ proc emitStaticPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
       t.addIntLit(i + 1)
       t.addSubtree(paramCursor)
 
-# (asgn __dokime_variant (bitor int __dokime_variant BIT))
-proc emitVariantBitAssign(t: var NifBuilder; bit: int)
-    {.ensuresNif: addedStmt(t).} =
-  t.withTree(AsgnS, NoLineInfo):
-    t.addIdent("__dokime_variant")
-    t.withTree(BitorX, NoLineInfo):
-      t.addIdent("int")
-      t.addIdent("__dokime_variant")
-      t.addIntLit(bit)
-
 # (var __dokime_variant . . int 0)
 # (if (elif (call isSome __dokime_param_I)
-#          (stmts (asgn __dokime_variant (bitor ... BIT))))*
+#          (stmts (asgn __dokime_variant (bitor int __dokime_variant BIT))))*
 proc emitVariantMask(t: var NifBuilder; input: QueryInput) =
   t.withTree(VarS, NoLineInfo):
     t.addIdent("__dokime_variant")
@@ -168,27 +158,13 @@ proc emitVariantMask(t: var NifBuilder; input: QueryInput) =
             t.bindSym("isSome")
             t.addIdent(paramName(paramIndex))
           t.withTree(StmtsS, NoLineInfo):
-            t.emitVariantBitAssign(1 shl part.clauseIndex)
-
-# (var __dokime_stmt . . (call emptyStmt))
-proc emitStmtVar(t: var NifBuilder)
-    {.ensuresNif: addedStmt(t).} =
-  t.withTree(VarS, NoLineInfo):
-    t.addIdent("__dokime_stmt")
-    t.addEmptyNode3()
-    t.withTree(CallX, NoLineInfo):
-      t.bindSym("emptyStmt")
-
-# (asgn __dokime_stmt (call prepareStmt DB SQL SQL_LEN))
-proc emitPrepareAssignment(t: var NifBuilder; input: QueryInput; sql: string)
-    {.ensuresNif: addedStmt(t).} =
-  t.withTree(AsgnS, NoLineInfo):
-    t.addIdent("__dokime_stmt")
-    t.withTree(CallX, NoLineInfo):
-      t.bindSym("prepareStmt")
-      t.addSubtree(input.dbExpr)
-      t.addStrLit(sql)
-      t.addIntLit(sql.len)
+            # (asgn __dokime_variant (bitor int __dokime_variant BIT))
+            t.withTree(AsgnS, NoLineInfo):
+              t.addIdent("__dokime_variant")
+              t.withTree(BitorX, NoLineInfo):
+                t.addIdent("int")
+                t.addIdent("__dokime_variant")
+                t.addIntLit(1 shl part.clauseIndex)
 
 # (call bindNextParam __dokime_stmt __dokime_bind
 #   (unsafeGet __dokime_param_I) | __dokime_param_I)
@@ -205,21 +181,19 @@ proc emitBindForParam(t: var NifBuilder; paramIndex: int; clauseIndex: int)
         t.bindSym("unsafeGet")
         t.addIdent(paramName(paramIndex))
 
-# (eq int __dokime_variant MASK)
-proc emitVariantPredicate(t: var NifBuilder; mask: int)
-    {.ensuresNif: addedExpr(t).} =
-  t.withTree(EqX, NoLineInfo):
-    t.addIdent("int")
-    t.addIdent("__dokime_variant")
-    t.addIntLit(mask)
-
 # (stmts
 #   (asgn __dokime_stmt (call prepareStmt DB SQL SQL_LEN))
 #   (var __dokime_bind . . 1)
 #   (call bindNextParam __dokime_stmt __dokime_bind ARG)*)
 proc emitVariantBody(t: var NifBuilder; input: QueryInput; mask: int) =
   let sql = input.parsedSql.renderVariant(mask)
-  t.emitPrepareAssignment(input, sql)
+  t.withTree(AsgnS, NoLineInfo):
+    t.addIdent("__dokime_stmt")
+    t.withTree(CallX, NoLineInfo):
+      t.bindSym("prepareStmt")
+      t.addSubtree(input.dbExpr)
+      t.addStrLit(sql)
+      t.addIntLit(sql.len)
 
   t.withTree(VarS, NoLineInfo):
     t.addIdent("__dokime_bind")
@@ -239,59 +213,63 @@ proc emitVariantBody(t: var NifBuilder; input: QueryInput; mask: int) =
 proc emitDynamicPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
   t.emitParamLocals(input)
   t.emitVariantMask(input)
-  t.emitStmtVar()
+
+  # (var __dokime_stmt . . (call emptyStmt))
+  t.withTree(VarS, NoLineInfo):
+    t.addIdent("__dokime_stmt")
+    t.addEmptyNode3()
+    t.withTree(CallX, NoLineInfo):
+      t.bindSym("emptyStmt")
 
   t.withTree(IfS, NoLineInfo):
     for mask in 1..<input.parsedSql.variantCount:
       t.withTree(ElifU, NoLineInfo):
-        t.emitVariantPredicate(mask)
+        # (eq int __dokime_variant MASK)
+        t.withTree(EqX, NoLineInfo):
+          t.addIdent("int")
+          t.addIdent("__dokime_variant")
+          t.addIntLit(mask)
         t.withTree(StmtsS, NoLineInfo):
           t.emitVariantBody(input, mask)
     t.withTree(ElseU, NoLineInfo):
       t.withTree(StmtsS, NoLineInfo):
         t.emitVariantBody(input, 0)
 
-# Dynamic or static prepare-and-binds depending on hasDynamicParts
-proc emitPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
-  if input.parsedSql.hasDynamicParts:
-    t.emitDynamicPrepareAndBinds(input)
-  else:
-    t.emitStaticPrepareAndBinds(input)
-
 # ---------------------------------------------------------------------------
-# Result emission
+# Query runtime expansion
 # ---------------------------------------------------------------------------
 
-# (call initRows __dokime_stmt (tuple (kv NAME DEFAULT)*))
-proc emitRowsResult(t: var NifBuilder; columns: seq[ColumnMeta])
-    {.ensuresNif: addedExpr(t).} =
-  t.withTree(CallX, NoLineInfo):
-    t.bindSym("initRows")
-    t.addIdent("__dokime_stmt")
-    t.emitDefaultRow(columns)
-
-# (var __dokime_row . . (tuple (kv NAME DEFAULT)*))
-proc emitRowVar(t: var NifBuilder; columns: seq[ColumnMeta])
-    {.ensuresNif: addedStmt(t).} =
+# Emits the runtime expansion of a single-row or optional-row query:
+#
+#   (var __dokime_row . . (tuple (kv NAME DEFAULT)*))
+#   (var __dokime_result . . (call none (at Opt ROW_TYPE)))?   -- qmOpt only
+#   (var __dokime_step . . (call stepStmtCode __dokime_stmt))
+#   (if (elif (call stepReturnedRow __dokime_step)
+#            (stmts (asgn __dokime_row DECODED_ROW)
+#                   (asgn __dokime_result (call some __dokime_row))?)))
+#   (var __dokime_finalize . . (call finalizeStmtCode __dokime_stmt))
+#   (call checkStepCode __dokime_step)
+#   (call checkFinalizeCode __dokime_finalize)
+#   (call requireStepRow __dokime_step) __dokime_row          -- qmOne
+#   __dokime_result                                           -- qmOpt
+proc emitSingleOrOptRow(t: var NifBuilder; columns: seq[ColumnMeta]; mode: QueryMode) =
+  # (var __dokime_row . . DEFAULT_ROW)
   t.withTree(VarS, NoLineInfo):
     t.addIdent("__dokime_row")
     t.addEmptyNode3()
     t.emitDefaultRow(columns)
 
-# (var __dokime_result . . (call none (at Opt ROW_TYPE)))
-proc emitOptResultVar(t: var NifBuilder; columns: seq[ColumnMeta])
-    {.ensuresNif: addedStmt(t).} =
-  t.withTree(VarS, NoLineInfo):
-    t.addIdent("__dokime_result")
-    t.addEmptyNode3()
-    t.withTree(CallX, NoLineInfo):
-      t.withTree(AtX, NoLineInfo):
-        t.bindSym("none")
-        t.emitRowType(columns)
+  if mode == qmOpt:
+    # (var __dokime_result . . (call none (at Opt ROW_TYPE)))
+    t.withTree(VarS, NoLineInfo):
+      t.addIdent("__dokime_result")
+      t.addEmptyNode3()
+      t.withTree(CallX, NoLineInfo):
+        t.withTree(AtX, NoLineInfo):
+          t.bindSym("none")
+          t.emitRowType(columns)
 
-# (var __dokime_step . . (call stepStmtCode __dokime_stmt))
-proc emitStepVar(t: var NifBuilder)
-    {.ensuresNif: addedStmt(t).} =
+  # (var __dokime_step . . (call stepStmtCode __dokime_stmt))
   t.withTree(VarS, NoLineInfo):
     t.addIdent("__dokime_step")
     t.addEmptyNode3()
@@ -299,11 +277,6 @@ proc emitStepVar(t: var NifBuilder)
       t.bindSym("stepStmtCode")
       t.addIdent("__dokime_stmt")
 
-# (if (elif (call stepReturnedRow __dokime_step)
-#          (stmts (asgn __dokime_row DECODED_ROW)
-#                 (asgn __dokime_result (call some __dokime_row))?)))
-proc emitDecodeIfRow(t: var NifBuilder; columns: seq[ColumnMeta]; mode: QueryMode)
-    {.ensuresNif: addedStmt(t).} =
   t.withTree(IfS, NoLineInfo):
     t.withTree(ElifU, NoLineInfo):
       t.withTree(CallX, NoLineInfo):
@@ -320,9 +293,7 @@ proc emitDecodeIfRow(t: var NifBuilder; columns: seq[ColumnMeta]; mode: QueryMod
               t.bindSym("some")
               t.addIdent("__dokime_row")
 
-# (var __dokime_finalize . . (call finalizeStmtCode __dokime_stmt))
-proc emitFinalizeVar(t: var NifBuilder)
-    {.ensuresNif: addedStmt(t).} =
+  # (var __dokime_finalize . . (call finalizeStmtCode __dokime_stmt))
   t.withTree(VarS, NoLineInfo):
     t.addIdent("__dokime_finalize")
     t.addEmptyNode3()
@@ -330,9 +301,6 @@ proc emitFinalizeVar(t: var NifBuilder)
       t.bindSym("finalizeStmtCode")
       t.addIdent("__dokime_stmt")
 
-# (call checkStepCode __dokime_step)
-# (call checkFinalizeCode __dokime_finalize)
-proc emitStepChecks(t: var NifBuilder) =
   t.withTree(CallX, NoLineInfo):
     t.bindSym("checkStepCode")
     t.addIdent("__dokime_step")
@@ -340,9 +308,6 @@ proc emitStepChecks(t: var NifBuilder) =
     t.bindSym("checkFinalizeCode")
     t.addIdent("__dokime_finalize")
 
-# (call requireStepRow __dokime_step) | __dokime_result
-proc emitOneOrOptResult(t: var NifBuilder; mode: QueryMode)
-    {.ensuresNif: addedAny(t).} =
   if mode == qmOne:
     t.withTree(CallX, NoLineInfo):
       t.bindSym("requireStepRow")
@@ -351,63 +316,9 @@ proc emitOneOrOptResult(t: var NifBuilder; mode: QueryMode)
   else:
     t.addIdent("__dokime_result")
 
-# (var __dokime_row . . DEFAULT_ROW)
-# (var __dokime_result . . (call none (at Opt ROW_TYPE)))?  -- qmOpt only
-# (var __dokime_step . . (call stepStmtCode __dokime_stmt))
-# (if (elif ...))
-# (var __dokime_finalize . . (call finalizeStmtCode __dokime_stmt))
-# (call checkStepCode __dokime_step)
-# (call checkFinalizeCode __dokime_finalize)
-# __dokime_row | __dokime_result
-proc emitOneOrOptQuery(t: var NifBuilder; columns: seq[ColumnMeta]; mode: QueryMode) =
-  t.emitRowVar(columns)
-  if mode == qmOpt:
-    t.emitOptResultVar(columns)
-  t.emitStepVar()
-  t.emitDecodeIfRow(columns, mode)
-  t.emitFinalizeVar()
-  t.emitStepChecks()
-  t.emitOneOrOptResult(mode)
-
-# ---------------------------------------------------------------------------
-# Tree assembly and entry point
-# ---------------------------------------------------------------------------
-
-# (block
-#   (stmts
-#     PREPARE_AND_BINDS
-#     (call initRows __dokime_stmt DEFAULT_ROW) | ONE_OR_OPT_QUERY))
-proc buildRowTree(input: QueryInput; columns: seq[ColumnMeta];
-    mode: QueryMode; info: LineInfo): NifBuilder =
-  result = createTree()
-  result.withTree(BlockS, info):
-    result.addEmptyNode()
-    result.withTree(StmtsS, info):
-      result.emitPrepareAndBinds(input)
-      case mode
-      of qmRows:
-        result.emitRowsResult(columns)
-      of qmOne, qmOpt:
-        result.emitOneOrOptQuery(columns, mode)
-      of qmExec:
-        discard
-
-# (block
-#   (stmts
-#     PREPARE_AND_BINDS
-#     (call execStmt DB __dokime_stmt)))
-proc buildCommandTree(input: QueryInput; info: LineInfo): NifBuilder =
-  result = createTree()
-  result.withTree(BlockS, info):
-    result.addEmptyNode()
-    result.withTree(StmtsS, info):
-      result.emitPrepareAndBinds(input)
-      result.withTree(CallX, NoLineInfo):
-        result.bindSym("execStmt")
-        result.addSubtree(input.dbExpr)
-        result.addIdent("__dokime_stmt")
-
-proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
+# Walks the `(db, "SQL", params...)` argument list and produces a QueryInput.
+# Returns "" on success or a diagnostic message on failure.
+proc parseQueryInput(inp: NifCursor; mode: QueryMode): tuple[query: QueryInput, error: string] =
   var dbExpr: NifCursor
   var sql = ""
   var params: seq[NifCursor] = @[]
@@ -428,27 +339,73 @@ proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
     inc argIndex
 
   if sql.len == 0:
-    return errorTree("dokime: expected " & $mode & "(db, \"SQL\", params...)", inp.info)
-
-  let parsed = parseDynamicSql(sql)
-  if parsed.error.len > 0:
-    return errorTree("dokime: " & parsed.error, inp.info)
-
-  let query = QueryInput(dbExpr: dbExpr, sql: sql, parsedSql: parsed, params: params)
-  let check = if parsed.hasDynamicParts: validateDynamicSql(parsed)
-              else: validateSql(sql)
-  if check.error.len > 0:
-    return errorTree("dokime: " & check.error, inp.info)
-  elif check.params != query.params.len:
-    return errorTree("dokime: expected " & $check.params &
-        " SQL parameter(s), got " & $query.params.len, inp.info)
-  elif mode == qmExec and check.columns.len > 0:
-    return errorTree("dokime: exec requires command SQL with no result columns", inp.info)
-  elif mode != qmExec and check.columns.len == 0:
-    return errorTree(
-        "dokime: " & $mode & " requires row-returning SQL; use exec for command SQL", inp.info)
-
-  if mode == qmExec:
-    result = buildCommandTree(query, inp.info)
+    result = (QueryInput(), "dokime: expected " & $mode & "(db, \"SQL\", params...)")
   else:
-    result = buildRowTree(query, check.columns, mode, inp.info)
+    let parsed = parseDynamicSql(sql)
+    if parsed.error.len > 0:
+      result = (QueryInput(), "dokime: " & parsed.error)
+    else:
+      result = (QueryInput(dbExpr: dbExpr, sql: sql, parsedSql: parsed, params: params), "")
+
+# Runs the compile-time SQL validation appropriate for static or dynamic queries
+# and returns either the validated column/parameter metadata or an error message.
+proc validateQuery(query: QueryInput): tuple[meta: SqlMeta, error: string] =
+  let check =
+    if query.parsedSql.hasDynamicParts:
+      validateDynamicSql(query.parsedSql)
+    else:
+      validateSql(query.sql)
+  if check.error.len > 0:
+    result = (SqlMeta(), "dokime: " & check.error)
+  elif check.params != query.params.len:
+    result = (SqlMeta(),
+      "dokime: expected " & $check.params & " SQL parameter(s), got " & $query.params.len)
+  else:
+    result = (check, "")
+
+# (block
+#   (stmts
+#     PREPARE_AND_BINDS
+#     (call initRows __dokime_stmt DEFAULT_ROW)))            -- qmRows
+#   ...or SINGLE_OR_OPT_ROW expansion                        -- qmOne, qmOpt
+#   ...or (call execStmt DB __dokime_stmt))                  -- qmExec
+proc buildTree(query: QueryInput; columns: seq[ColumnMeta];
+    mode: QueryMode; info: LineInfo): NifBuilder =
+  result = createTree()
+  result.withTree(BlockS, info):
+    result.addEmptyNode()
+    result.withTree(StmtsS, info):
+      if query.parsedSql.hasDynamicParts:
+        result.emitDynamicPrepareAndBinds(query)
+      else:
+        result.emitStaticPrepareAndBinds(query)
+      case mode
+      of qmRows:
+        # (call initRows __dokime_stmt DEFAULT_ROW)
+        result.withTree(CallX, NoLineInfo):
+          result.bindSym("initRows")
+          result.addIdent("__dokime_stmt")
+          result.emitDefaultRow(columns)
+      of qmOne, qmOpt:
+        result.emitSingleOrOptRow(columns, mode)
+      of qmExec:
+        result.withTree(CallX, NoLineInfo):
+          result.bindSym("execStmt")
+          result.addSubtree(query.dbExpr)
+          result.addIdent("__dokime_stmt")
+
+proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
+  let (query, parseErr) = parseQueryInput(inp, mode)
+  if parseErr.len > 0:
+    result = errorTree(parseErr, inp.info)
+  else:
+    let (meta, validateErr) = validateQuery(query)
+    if validateErr.len > 0:
+      result = errorTree(validateErr, inp.info)
+    elif mode == qmExec and meta.columns.len > 0:
+      result = errorTree("dokime: exec requires command SQL with no result columns", inp.info)
+    elif mode != qmExec and meta.columns.len == 0:
+      result = errorTree(
+          "dokime: " & $mode & " requires row-returning SQL; use exec for command SQL", inp.info)
+    else:
+      result = buildTree(query, meta.columns, mode, inp.info)
