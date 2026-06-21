@@ -55,21 +55,6 @@ func normalizeSql*(sql: string): string =
       inc i, 2
       while i < sql.len and sql[i] != '\n':
         inc i
-    elif sql[i] == '/' and i + 1 < sql.len and sql[i + 1] == '*':
-      inc i, 2
-      var depth = 1
-      while i + 1 < sql.len and depth > 0:
-        if sql[i] == '/' and sql[i + 1] == '*':
-          inc depth
-          inc i, 2
-        elif sql[i] == '*' and sql[i + 1] == '/':
-          dec depth
-          inc i, 2
-        else:
-          inc i
-      if result.len > 0 and not lastWasSpace:
-        result.add ' '
-        lastWasSpace = true
     elif sql[i] in {' ', '\t', '\n', '\r'}:
       if result.len > 0 and not lastWasSpace:
         result.add ' '

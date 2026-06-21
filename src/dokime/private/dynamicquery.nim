@@ -25,18 +25,6 @@ func skipComment(sql: string; start: int): int =
     result = start + 2
     while result < sql.len and sql[result] != '\n':
       inc result
-  elif start + 1 < sql.len and sql[start] == '/' and sql[start + 1] == '*':
-    result = start + 2
-    var depth = 1
-    while result + 1 < sql.len and depth > 0:
-      if sql[result] == '/' and sql[result + 1] == '*':
-        inc depth
-        inc result, 2
-      elif sql[result] == '*' and sql[result + 1] == '/':
-        dec depth
-        inc result, 2
-      else:
-        inc result
   else:
     result = start
 
@@ -53,7 +41,7 @@ proc addPart(parsed: var ParsedSql; text: string; isOptional: bool;
     case text[i]
     of '\'':
       i = text.skipStringLiteral(i)
-    of '-', '/':
+    of '-':
       let after = text.skipComment(i)
       if after > i:
         i = after
@@ -84,7 +72,7 @@ func findOptionalClose(sql: string; start: int): (int, string) =
     case sql[pos]
     of '\'':
       pos = sql.skipStringLiteral(pos)
-    of '-', '/':
+    of '-':
       let after = sql.skipComment(pos)
       if after > pos:
         pos = after
@@ -109,7 +97,7 @@ proc parseDynamicSql*(sql: string): ParsedSql =
     case sql[i]
     of '\'':
       i = sql.skipStringLiteral(i)
-    of '-', '/':
+    of '-':
       let after = sql.skipComment(i)
       if after > i:
         i = after
