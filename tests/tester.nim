@@ -24,7 +24,8 @@ const Positive = [
   "tnullableparams.nim",
   "trows.nim",
   "tstressownership.nim",
-  "tnormalize.nim"
+  "tnormalize.nim",
+  "tnotnull.nim"
 ]
 
 const Negative = [

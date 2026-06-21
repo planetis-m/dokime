@@ -5,37 +5,97 @@
 ## nullability) and mirrors the result to the offline cache so subsequent
 ## builds can validate without a database connection.
 
-import std / envvars
+import std / [envvars, strutils]
 
 import cacheio, dynamicquery
 import ".." / sqlite3
 
-proc toColumnKind(typeName: string): ColumnKind =
+func isLiteral(s: string): bool =
+  let t = s.strip
+  if t.len == 0:
+    return false
+  if t.startsWith("'") and t.endsWith("'"):
+    return true
+  var i = 0
+  if t[i] == '-':
+    inc i
+  var dotSeen = false
+  var hasDigit = false
+  while i < t.len:
+    case t[i]
+    of '0'..'9':
+      hasDigit = true
+      inc i
+    of '.':
+      if dotSeen:
+        return false
+      dotSeen = true
+      inc i
+    else:
+      return false
+  result = hasDigit
+
+func isKnownNotNull(colName: string): bool =
+  let n = colName.toLowerAscii
+  if n.startsWith("count("):
+    result = true
+  elif n.startsWith("exists("):
+    result = true
+  elif n.startsWith("typeof(") or n.startsWith("quote(") or
+       n.startsWith("zeroblob(") or n.startsWith("randomblob(") or
+       n.startsWith("random("):
+    result = true
+  elif n.startsWith("row_number(") or n.startsWith("rank(") or
+       n.startsWith("dense_rank(") or n.startsWith("ntile(") or
+       n.startsWith("percent_rank(") or n.startsWith("cume_dist("):
+    result = true
+  elif n == "current_date" or n == "current_time" or n == "current_timestamp":
+    result = true
+  elif isLiteral(colName):
+    result = true
+  else:
+    result = false
+
+proc toColumnKind(typeName: string; colName: string): ColumnKind =
   case typeName
-  of "INTEGER", "INT": ckInteger
-  of "TEXT", "STRING": ckText
-  of "REAL", "FLOAT", "DOUBLE": ckReal
-  of "BLOB": ckBlob
-  else: ckNull
+  of "INTEGER", "INT": result = ckInteger
+  of "TEXT", "STRING": result = ckText
+  of "REAL", "FLOAT", "DOUBLE": result = ckReal
+  of "BLOB": result = ckBlob
+  else:
+    let n = colName.toLowerAscii
+    if n.startsWith("count(") or n.startsWith("exists(") or n.startsWith("random("):
+      result = ckInteger
+    elif n.startsWith("typeof(") or n.startsWith("quote("):
+      result = ckText
+    elif n.startsWith("zeroblob(") or n.startsWith("randomblob("):
+      result = ckBlob
+    elif isLiteral(colName):
+      if colName.strip.startsWith("'"):
+        result = ckText
+      else:
+        result = ckInteger
+    else:
+      result = ckNull
 
 proc inferNullable(db: sqlite3.DbConn; stmt: sqlite3.Stmt; col: int): bool =
   let tableName = sqlite3_column_table_name(stmt, col.cint)
   let originName = sqlite3_column_origin_name(stmt, col.cint)
   if tableName == nil:
-    return true
-  if originName == nil:
-    return true
-
-  var
-    notNull: cint = 0
-    primaryKey: cint = 0
-    autoInc: cint = 0
-  let rc = sqlite3_table_column_metadata(db, nil, tableName, originName,
-      nil, nil, notNull, primaryKey, autoInc)
-  if rc != SQLITE_OK:
-    result = true
+    result = not isKnownNotNull(fromCString(sqlite3_column_name(stmt, col.cint)))
+  elif originName == nil:
+    result = not isKnownNotNull(fromCString(sqlite3_column_name(stmt, col.cint)))
   else:
-    result = notNull == 0 and primaryKey == 0
+    var
+      notNull: cint = 0
+      primaryKey: cint = 0
+      autoInc: cint = 0
+    let rc = sqlite3_table_column_metadata(db, nil, tableName, originName,
+        nil, nil, notNull, primaryKey, autoInc)
+    if rc != SQLITE_OK:
+      result = true
+    else:
+      result = notNull == 0 and primaryKey == 0
 
 proc validateSql*(sql: string): SqlMeta =
   var dbPath = getEnv("DOKIME_DATABASE_PATH")
@@ -68,7 +128,7 @@ proc validateSql*(sql: string): SqlMeta =
     let typeStr = if decltype != nil: fromCString(decltype) else: ""
     columns.add ColumnMeta(
       name: colName,
-      kind: toColumnKind(typeStr),
+      kind: toColumnKind(typeStr, colName),
       nullable: inferNullable(db, stmt, i))
   discard sqlite3_finalize(stmt)
   discard sqlite3_close_v2(db)
