@@ -23,6 +23,7 @@ type
     sql: string
     parsedSql: ParsedSql
     params: seq[NifCursor]
+    error: string
 
 # ---------------------------------------------------------------------------
 # Column type emission
@@ -317,8 +318,8 @@ proc emitSingleOrOptRow(t: var NifBuilder; columns: seq[ColumnMeta]; mode: Query
     t.addIdent("__dokime_result")
 
 # Walks the `(db, "SQL", params...)` argument list and produces a QueryInput.
-# Returns "" on success or a diagnostic message on failure.
-proc parseQueryInput(inp: NifCursor; mode: QueryMode): tuple[query: QueryInput, error: string] =
+# Sets `.error` on failure.
+proc parseQueryInput(inp: NifCursor; mode: QueryMode): QueryInput =
   var dbExpr: NifCursor
   var sql = ""
   var params: seq[NifCursor] = @[]
@@ -339,29 +340,25 @@ proc parseQueryInput(inp: NifCursor; mode: QueryMode): tuple[query: QueryInput, 
     inc argIndex
 
   if sql.len == 0:
-    result = (QueryInput(), "dokime: expected " & $mode & "(db, \"SQL\", params...)")
+    result = QueryInput(error: "dokime: expected " & $mode & "(db, \"SQL\", params...)")
   else:
-    let parsed = parseDynamicSql(sql)
-    if parsed.error.len > 0:
-      result = (QueryInput(), "dokime: " & parsed.error)
-    else:
-      result = (QueryInput(dbExpr: dbExpr, sql: sql, parsedSql: parsed, params: params), "")
+    result = QueryInput(dbExpr: dbExpr, sql: sql, parsedSql: parseDynamicSql(sql), params: params)
+    if result.parsedSql.error.len > 0:
+      result.error = "dokime: " & result.parsedSql.error
 
 # Runs the compile-time SQL validation appropriate for static or dynamic queries
-# and returns either the validated column/parameter metadata or an error message.
-proc validateQuery(query: QueryInput): tuple[meta: SqlMeta, error: string] =
-  let check =
+# and returns the validated column/parameter metadata with `.error` set on failure.
+proc validateQuery(query: QueryInput): SqlMeta =
+  result =
     if query.parsedSql.hasDynamicParts:
       validateDynamicSql(query.parsedSql)
     else:
       validateSql(query.sql)
-  if check.error.len > 0:
-    result = (SqlMeta(), "dokime: " & check.error)
-  elif check.params != query.params.len:
-    result = (SqlMeta(),
-      "dokime: expected " & $check.params & " SQL parameter(s), got " & $query.params.len)
-  else:
-    result = (check, "")
+  if result.error.len > 0:
+    result.error = "dokime: " & result.error
+  elif result.params != query.params.len:
+    result.error = "dokime: expected " & $result.params &
+        " SQL parameter(s), got " & $query.params.len
 
 # (block
 #   (stmts
@@ -395,13 +392,13 @@ proc buildTree(query: QueryInput; columns: seq[ColumnMeta];
           result.addIdent("__dokime_stmt")
 
 proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
-  let (query, parseErr) = parseQueryInput(inp, mode)
-  if parseErr.len > 0:
-    result = errorTree(parseErr, inp.info)
+  let query = parseQueryInput(inp, mode)
+  if query.error.len > 0:
+    result = errorTree(query.error, inp.info)
   else:
-    let (meta, validateErr) = validateQuery(query)
-    if validateErr.len > 0:
-      result = errorTree(validateErr, inp.info)
+    let meta = validateQuery(query)
+    if meta.error.len > 0:
+      result = errorTree(meta.error, inp.info)
     elif mode == qmExec and meta.columns.len > 0:
       result = errorTree("dokime: exec requires command SQL with no result columns", inp.info)
     elif mode != qmExec and meta.columns.len == 0:
