@@ -259,21 +259,6 @@ proc emitPrepareAndBinds(t: var NifBuilder; input: QueryInput) =
     t.emitStaticPrepareAndBinds(input)
 
 # ---------------------------------------------------------------------------
-# SQL literal reading
-# ---------------------------------------------------------------------------
-
-proc readSqlLiteral(node: NifCursor; sql: var string): bool =
-  if node.kind == StringLit:
-    sql = node.stringValue
-    return true
-
-  if node.kind == ParLe and node.exprKind == SufX:
-    var child = firstChild(node)
-    if child.hasMore and child.kind == StringLit:
-      sql = child.stringValue
-      result = true
-
-# ---------------------------------------------------------------------------
 # Result emission
 # ---------------------------------------------------------------------------
 
@@ -432,8 +417,11 @@ proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
     case argIndex
     of 0: dbExpr = child
     of 1:
-      if not readSqlLiteral(child, sql):
-        return errorTree("dokime: second argument must be a SQL string literal", child.info)
+      if child.kind == StringLit:
+        sql = child.stringValue
+      else:
+        var inner = firstChild(child)
+        sql = inner.stringValue
     else:
       params.add(child)
     skip child
