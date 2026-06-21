@@ -22,7 +22,8 @@ const Positive = [
   "tquerycardinality.nim",
   "tnullable.nim",
   "tnullableparams.nim",
-  "trows.nim"
+  "trows.nim",
+  "tstressownership.nim"
 ]
 
 const Negative = [

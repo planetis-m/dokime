@@ -5,18 +5,23 @@
 ## nullability) and mirrors the result to the offline cache so subsequent
 ## builds can validate without a database connection.
 
-import std / envvars
+import std / [envvars, strutils]
 
 import cacheio, dynamicquery
 import ".." / sqlite3
 
 proc toColumnKind(typeName: string): ColumnKind =
-  case typeName
-  of "INTEGER", "INT": ckInteger
-  of "TEXT", "STRING": ckText
-  of "REAL", "FLOAT", "DOUBLE": ckReal
-  of "BLOB": ckBlob
-  else: ckNull
+  let upper = typeName.toUpperAscii
+  if upper.contains("INT"):
+    result = ckInteger
+  elif upper.contains("CHAR") or upper.contains("CLOB") or upper.contains("TEXT"):
+    result = ckText
+  elif upper.contains("BLOB"):
+    result = ckBlob
+  elif upper.contains("REAL") or upper.contains("FLOA") or upper.contains("DOUB"):
+    result = ckReal
+  else:
+    result = ckNull
 
 proc inferNullable(db: sqlite3.DbConn; stmt: sqlite3.Stmt; col: int): bool =
   let tableName = sqlite3_column_table_name(stmt, col.cint)
