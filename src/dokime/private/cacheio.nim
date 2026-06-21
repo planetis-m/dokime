@@ -1,6 +1,6 @@
 ## Offline cache I/O for dokime query plugins: binary encode/decode and file read/write.
 
-import std/[dirs, hashes, os, strutils, syncio]
+import std/[dirs, hashes, os, syncio]
 
 const
   CacheMagic* = "DKC1"
@@ -41,36 +41,8 @@ func skipStringLiteral*(sql: string; start: int): int =
     else:
       inc result
 
-func normalizeSql*(sql: string): string =
-  result = newStringOfCap(sql.len)
-  var i = 0
-  var lastWasSpace = false
-  while i < sql.len:
-    if sql[i] == '\'':
-      let start = i
-      i = sql.skipStringLiteral(i)
-      result.add substr(sql, start, i - 1)
-      lastWasSpace = false
-    elif sql[i] == '-' and i + 1 < sql.len and sql[i + 1] == '-':
-      inc i, 2
-      while i < sql.len and sql[i] != '\n':
-        inc i
-    elif sql[i] in {' ', '\t', '\n', '\r'}:
-      if result.len > 0 and not lastWasSpace:
-        result.add ' '
-        lastWasSpace = true
-      inc i
-      while i < sql.len and sql[i] in {' ', '\t', '\n', '\r'}:
-        inc i
-    else:
-      result.add sql[i].toLowerAscii
-      inc i
-      lastWasSpace = false
-  if lastWasSpace and result.len > 0:
-    result.setLen(result.len - 1)
-
 proc cacheFileName(sql: string): string =
-  result = $hash(normalizeSql(sql)) & ".dkc"
+  result = $hash(sql) & ".dkc"
 
 proc cacheFilePath(sql: string): string =
   result = cacheQueriesDir() / cacheFileName(sql)
@@ -176,7 +148,7 @@ proc writeCache*(sql: string; columns: seq[ColumnMeta]; params: int) =
   try:
     let dir = cacheQueriesDir()
     dirs.createDir(dirs.path(dir))
-    writeFile(cacheFilePath(sql), encodeCache(normalizeSql(sql), columns, params))
+    writeFile(cacheFilePath(sql), encodeCache(sql, columns, params))
   except:
     discard
 
@@ -187,6 +159,6 @@ proc readCache*(sql: string): SqlMeta =
       error: "offline cache entry not found for this SQL; build once with DOKIME_DATABASE_PATH set")
   else:
     try:
-      result = decodeCache(readFile(path), normalizeSql(sql))
+      result = decodeCache(readFile(path), sql)
     except:
       result = SqlMeta(error: "cannot read offline cache entry")
