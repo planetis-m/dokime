@@ -20,18 +20,6 @@ type
 func hasDynamicParts*(sql: ParsedSql): bool =
   result = sql.clauseCount > 0
 
-func skipStringLiteral(sql: string; start: int): int =
-  result = start + 1
-  while result < sql.len:
-    if sql[result] == '\'':
-      if result + 1 < sql.len and sql[result + 1] == '\'':
-        inc result, 2
-      else:
-        inc result
-        return
-    else:
-      inc result
-
 func skipComment(sql: string; start: int): int =
   if start + 1 < sql.len and sql[start] == '-' and sql[start + 1] == '-':
     result = start + 2

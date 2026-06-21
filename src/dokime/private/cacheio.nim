@@ -29,7 +29,7 @@ type
 proc cacheQueriesDir(): string =
   result = DefaultCacheRoot / "queries"
 
-func advancePastString(sql: string; start: int): int =
+func skipStringLiteral*(sql: string; start: int): int =
   result = start + 1
   while result < sql.len:
     if sql[result] == '\'':
@@ -48,7 +48,7 @@ func normalizeSql*(sql: string): string =
   while i < sql.len:
     if sql[i] == '\'':
       let start = i
-      i = sql.advancePastString(i)
+      i = sql.skipStringLiteral(i)
       result.add substr(sql, start, i - 1)
       lastWasSpace = false
     elif sql[i] == '-' and i + 1 < sql.len and sql[i + 1] == '-':
