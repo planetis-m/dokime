@@ -101,37 +101,35 @@ proc decodeCache*(data: string; expectedSql: string): SqlMeta =
 
   let version = state.readU32()
   if state.error.len > 0:
-    return SqlMeta(error: state.error)
-  if version != CacheVersion:
-    return SqlMeta(error: "unsupported cache version " & $version &
-        " (expected " & $CacheVersion & ")")
-
-  let cachedSql = state.readString()
-  if cachedSql != expectedSql:
-    return SqlMeta(error: "cache SQL does not match query text")
-
-  let params = int(state.readU32())
-  let columnCount = int(state.readU32())
-  var columns: seq[ColumnMeta] = @[]
-
-  for _ in 0..<columnCount:
-    let name = state.readString()
-    let kindValue = int(state.readU8())
-    let nullable = state.readU8() != 0'u8
-    if kindValue < ord(low(ColumnKind)) or kindValue > ord(high(ColumnKind)):
-      return SqlMeta(error: "cache has invalid column kind")
-    columns.add ColumnMeta(
-      name: name,
-      kind: cast[ColumnKind](kindValue),
-      nullable: nullable
-    )
-
-  if state.error.len > 0:
     result = SqlMeta(error: state.error)
-  elif state.pos != state.data.len:
-    result = SqlMeta(error: "cache file has trailing bytes")
+  elif version != CacheVersion:
+    result = SqlMeta(error: "unsupported cache version " & $version &
+        " (expected " & $CacheVersion & ")")
   else:
-    result = SqlMeta(columns: columns, params: params)
+    let cachedSql = state.readString()
+    if cachedSql != expectedSql:
+      result = SqlMeta(error: "cache SQL does not match query text")
+    else:
+      let params = int(state.readU32())
+      let columnCount = int(state.readU32())
+      var columns: seq[ColumnMeta] = @[]
+      for _ in 0..<columnCount:
+        let name = state.readString()
+        let kindValue = int(state.readU8())
+        let nullable = state.readU8() != 0'u8
+        if kindValue < ord(low(ColumnKind)) or kindValue > ord(high(ColumnKind)):
+          return SqlMeta(error: "cache has invalid column kind")
+        columns.add ColumnMeta(
+          name: name,
+          kind: cast[ColumnKind](kindValue),
+          nullable: nullable
+        )
+      if state.error.len > 0:
+        result = SqlMeta(error: state.error)
+      elif state.pos != state.data.len:
+        result = SqlMeta(error: "cache file has trailing bytes")
+      else:
+        result = SqlMeta(columns: columns, params: params)
 
 proc writeCache*(sql: string; columns: seq[ColumnMeta]; params: int) =
   try:

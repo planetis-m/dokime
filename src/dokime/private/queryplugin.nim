@@ -357,8 +357,8 @@ proc validateQuery(query: QueryInput): SqlMeta =
   if result.error.len > 0:
     result.error = "dokime: " & result.error
   elif result.params != query.params.len:
-    result.error = "dokime: expected " & $result.params &
-        " SQL parameter(s), got " & $query.params.len
+    result.error = "dokime: expected " & $result.params & " SQL parameter(s), got " &
+        $query.params.len
 
 # (block
 #   (stmts
