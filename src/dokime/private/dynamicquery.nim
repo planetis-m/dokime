@@ -32,6 +32,26 @@ func skipStringLiteral(sql: string; start: int): int =
     else:
       inc result
 
+func skipComment(sql: string; start: int): int =
+  if start + 1 < sql.len and sql[start] == '-' and sql[start + 1] == '-':
+    result = start + 2
+    while result < sql.len and sql[result] != '\n':
+      inc result
+  elif start + 1 < sql.len and sql[start] == '/' and sql[start + 1] == '*':
+    result = start + 2
+    var depth = 1
+    while result + 1 < sql.len and depth > 0:
+      if sql[result] == '/' and sql[result + 1] == '*':
+        inc depth
+        inc result, 2
+      elif sql[result] == '*' and sql[result + 1] == '/':
+        dec depth
+        inc result, 2
+      else:
+        inc result
+  else:
+    result = start
+
 proc addPart(parsed: var ParsedSql; text: string; isOptional: bool;
     clauseIndex: int) =
   if text.len == 0:
@@ -42,13 +62,21 @@ proc addPart(parsed: var ParsedSql; text: string; isOptional: bool;
   var paramIndex = 0
   var i = 0
   while i < text.len:
-    if text[i] == '\'':
+    case text[i]
+    of '\'':
       i = text.skipStringLiteral(i)
+    of '-', '/':
+      let after = text.skipComment(i)
+      if after > i:
+        i = after
+      else:
+        inc i
+    of '?':
+      paramIndex = paramBase + paramCount
+      inc paramCount
+      parsed.params.add(if isOptional: clauseIndex else: -1)
+      inc i
     else:
-      if text[i] == '?':
-        paramIndex = paramBase + paramCount
-        inc paramCount
-        parsed.params.add(if isOptional: clauseIndex else: -1)
       inc i
 
   if isOptional and paramCount != 1:
@@ -68,6 +96,12 @@ func findOptionalClose(sql: string; start: int): (int, string) =
     case sql[pos]
     of '\'':
       pos = sql.skipStringLiteral(pos)
+    of '-', '/':
+      let after = sql.skipComment(pos)
+      if after > pos:
+        pos = after
+      else:
+        inc pos
     of '[':
       return (-1, "nested optional SQL blocks are not supported")
     of ']':
@@ -87,6 +121,12 @@ proc parseDynamicSql*(sql: string): ParsedSql =
     case sql[i]
     of '\'':
       i = sql.skipStringLiteral(i)
+    of '-', '/':
+      let after = sql.skipComment(i)
+      if after > i:
+        i = after
+      else:
+        inc i
     of '[':
       result.addPart(substr(sql, textStart, i - 1), false, -1)
 

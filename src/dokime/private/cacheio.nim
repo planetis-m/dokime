@@ -1,6 +1,6 @@
 ## Offline cache I/O for dokime query plugins: binary encode/decode and file read/write.
 
-import std/[dirs, hashes, os, syncio]
+import std/[dirs, hashes, os, strutils, syncio]
 
 const
   CacheMagic* = "DKC1"
@@ -29,8 +29,63 @@ type
 proc cacheQueriesDir(): string =
   result = DefaultCacheRoot / "queries"
 
+func advancePastString(sql: string; start: int): int =
+  result = start + 1
+  while result < sql.len:
+    if sql[result] == '\'':
+      if result + 1 < sql.len and sql[result + 1] == '\'':
+        inc result, 2
+      else:
+        inc result
+        return
+    else:
+      inc result
+
+func normalizeSql*(sql: string): string =
+  result = newStringOfCap(sql.len)
+  var i = 0
+  var lastWasSpace = false
+  while i < sql.len:
+    if sql[i] == '\'':
+      let start = i
+      i = sql.advancePastString(i)
+      result.add substr(sql, start, i - 1)
+      lastWasSpace = false
+    elif sql[i] == '-' and i + 1 < sql.len and sql[i + 1] == '-':
+      inc i, 2
+      while i < sql.len and sql[i] != '\n':
+        inc i
+    elif sql[i] == '/' and i + 1 < sql.len and sql[i + 1] == '*':
+      inc i, 2
+      var depth = 1
+      while i + 1 < sql.len and depth > 0:
+        if sql[i] == '/' and sql[i + 1] == '*':
+          inc depth
+          inc i, 2
+        elif sql[i] == '*' and sql[i + 1] == '/':
+          dec depth
+          inc i, 2
+        else:
+          inc i
+      if result.len > 0 and not lastWasSpace:
+        result.add ' '
+        lastWasSpace = true
+    elif sql[i] in {' ', '\t', '\n', '\r'}:
+      if result.len > 0 and not lastWasSpace:
+        result.add ' '
+        lastWasSpace = true
+      inc i
+      while i < sql.len and sql[i] in {' ', '\t', '\n', '\r'}:
+        inc i
+    else:
+      result.add sql[i].toLowerAscii
+      inc i
+      lastWasSpace = false
+  if lastWasSpace and result.len > 0:
+    result.setLen(result.len - 1)
+
 proc cacheFileName(sql: string): string =
-  result = $hash(sql) & ".dkc"
+  result = $hash(normalizeSql(sql)) & ".dkc"
 
 proc cacheFilePath(sql: string): string =
   result = cacheQueriesDir() / cacheFileName(sql)
@@ -136,7 +191,7 @@ proc writeCache*(sql: string; columns: seq[ColumnMeta]; params: int) =
   try:
     let dir = cacheQueriesDir()
     dirs.createDir(dirs.path(dir))
-    writeFile(cacheFilePath(sql), encodeCache(sql, columns, params))
+    writeFile(cacheFilePath(sql), encodeCache(normalizeSql(sql), columns, params))
   except:
     discard
 
@@ -147,6 +202,6 @@ proc readCache*(sql: string): SqlMeta =
       error: "offline cache entry not found for this SQL; build once with DOKIME_DATABASE_PATH set")
   else:
     try:
-      result = decodeCache(readFile(path), sql)
+      result = decodeCache(readFile(path), normalizeSql(sql))
     except:
       result = SqlMeta(error: "cannot read offline cache entry")
