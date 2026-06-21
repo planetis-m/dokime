@@ -124,10 +124,12 @@ proc validateSql*(sql: string): SqlMeta =
   var columns: seq[ColumnMeta] = @[]
   for i in 0..<count.int:
     let colName = fromCString(sqlite3_column_name(stmt, i.cint))
+    let displayName =
+      if isValidIdent(colName): colName else: "col_" & $i
     let decltype = sqlite3_column_decltype(stmt, i.cint)
     let typeStr = if decltype != nil: fromCString(decltype) else: ""
     columns.add ColumnMeta(
-      name: colName,
+      name: displayName,
       kind: toColumnKind(typeStr, colName),
       nullable: inferNullable(db, stmt, i))
   discard sqlite3_finalize(stmt)

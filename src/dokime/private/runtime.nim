@@ -1,6 +1,7 @@
 import std/[opt, strutils]
 
 import ".." / sqlite3
+import cacheio
 
 type
   RowSet*[T: tuple] = object
@@ -107,15 +108,7 @@ proc requireActiveTransaction(tx: Transaction): sqlite3.DbConn {.raises.} =
 proc validSavepointName(name: string): bool =
   if name.len == 0 or name.len > 63:
     return false
-
-  if name[0] notin IdentStartChars:
-    return false
-
-  for ch in name:
-    if ch notin IdentChars:
-      return false
-
-  result = true
+  result = isValidIdent(name)
 
 proc savepointSql(name: string; keyword: string): string {.raises.} =
   if not validSavepointName(name):

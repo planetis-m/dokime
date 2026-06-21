@@ -1,6 +1,6 @@
 ## Offline cache I/O for dokime query plugins: binary encode/decode and file read/write.
 
-import std/[dirs, hashes, os, syncio]
+import std/[dirs, hashes, os, strutils, syncio]
 
 const
   CacheMagic* = "DKC1"
@@ -40,6 +40,14 @@ func skipStringLiteral*(sql: string; start: int): int =
         return
     else:
       inc result
+
+func isValidIdent*(name: string): bool =
+  if name.len == 0 or name[0] notin IdentStartChars:
+    return false
+  for ch in name:
+    if ch notin IdentChars:
+      return false
+  result = true
 
 proc cacheFileName(sql: string): string =
   result = $hash(sql) & ".dkc"
