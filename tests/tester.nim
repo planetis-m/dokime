@@ -25,7 +25,8 @@ const Positive = [
   "trows.nim",
   "tstressownership.nim",
   "tnormalize.nim",
-  "tnotnull.nim"
+  "tnotnull.nim",
+  "texprtypes.nim"
 ]
 
 const Negative = [
@@ -58,7 +59,8 @@ proc ensureValidateDb() =
   let schema = [
     "CREATE TABLE users (id INTEGER NOT NULL, name TEXT NOT NULL, age INTEGER NOT NULL) STRICT",
     "CREATE TABLE profiles (id INTEGER NOT NULL, name TEXT NOT NULL, nickname TEXT, score REAL) STRICT",
-    "CREATE TABLE notes (id INTEGER NOT NULL, title TEXT NOT NULL, body TEXT, tag TEXT) STRICT"
+    "CREATE TABLE notes (id INTEGER NOT NULL, title TEXT NOT NULL, body TEXT, tag TEXT) STRICT",
+    "CREATE TABLE items (id INTEGER NOT NULL, name TEXT NOT NULL, price REAL NOT NULL, tag TEXT, qty INTEGER) STRICT"
   ]
   for stmt in schema:
     let rc = execShellCmd("sqlite3 " & ValidateDb & " '" & stmt & "'")

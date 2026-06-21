@@ -70,7 +70,7 @@ func inferExprKind(colName: string): ColumnKind =
   if n.startsWith("count(") or n.startsWith("exists(") or n.startsWith("random(") or
      n.startsWith("row_number(") or n.startsWith("rank(") or
      n.startsWith("dense_rank(") or n.startsWith("ntile(") or
-     n.startsWith("sum(") or n.startsWith("length(") or
+     n.startsWith("length(") or
      n.startsWith("instr(") or n.startsWith("unicode(") or
      n.startsWith("changes(") or n.startsWith("total_changes(") or
      n.startsWith("last_insert_rowid("):
