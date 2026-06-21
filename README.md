@@ -34,7 +34,7 @@ if maybeRow.isNone:
 
 ## Requirements
 
-- **Nimony** (experimental Nim compiler by Araq)
+- **Nimony**
 - SQLite ≥ 3.37 (for STRICT tables)
 - libsqlite3 installed on the system
 
@@ -252,3 +252,7 @@ Nimony, and verifies that negative tests fail with the expected compile errors.
 - Offline builds read previously validated query cache entries; there is not a
   dedicated `dokime prepare` command yet.
 - STRICT tables required for reliable type inference.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
