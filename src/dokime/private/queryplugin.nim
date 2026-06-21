@@ -423,9 +423,6 @@ proc buildCommandTree(input: QueryInput; info: LineInfo): NifBuilder =
         result.addIdent("__dokime_stmt")
 
 proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
-  if inp.kind != ParLe or inp.stmtKind != StmtsS:
-    return errorTree("dokime: invalid plugin input", inp.info)
-
   var dbExpr: NifCursor
   var sql = ""
   var params: seq[NifCursor] = @[]

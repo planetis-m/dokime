@@ -29,7 +29,19 @@ const Negative = [
   "tbadquery.nim",
   "tbadtable.nim",
   "ttransactioncopy.nim",
-  "ttypemismatch.nim"
+  "ttypemismatch.nim",
+  "tbadparam.nim",
+  "tbadparamextra.nim",
+  "tbadexec.nim",
+  "tbadcommand.nim",
+  "tbademptysql.nim",
+  "tbadnonliteral.nim",
+  "tbadnested.nim",
+  "tbadunterminated.nim",
+  "tbadunmatched.nim",
+  "tbadnoparams.nim",
+  "tbadmultipleparams.nim",
+  "tbadtoomany.nim"
 ]
 
 const OfflineOnly = [
