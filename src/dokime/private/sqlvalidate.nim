@@ -45,7 +45,10 @@ func isKnownNotNull(colName: string): bool =
      n.startsWith("random(") or n.startsWith("row_number(") or
      n.startsWith("rank(") or n.startsWith("dense_rank(") or
      n.startsWith("ntile(") or n.startsWith("percent_rank(") or
-     n.startsWith("cume_dist("):
+     n.startsWith("cume_dist(") or
+     n.startsWith("sqlite_version(") or n.startsWith("sqlite_source_id(") or
+     n.startsWith("last_insert_rowid(") or n.startsWith("changes(") or
+     n.startsWith("total_changes(") or n.startsWith("char("):
     result = true
   elif n == "current_date" or n == "current_time" or n == "current_timestamp":
     result = true
@@ -66,11 +69,26 @@ func inferExprKind(colName: string): ColumnKind =
   let n = colName.toLowerAscii
   if n.startsWith("count(") or n.startsWith("exists(") or n.startsWith("random(") or
      n.startsWith("row_number(") or n.startsWith("rank(") or
-     n.startsWith("dense_rank(") or n.startsWith("ntile("):
+     n.startsWith("dense_rank(") or n.startsWith("ntile(") or
+     n.startsWith("sum(") or n.startsWith("length(") or
+     n.startsWith("instr(") or n.startsWith("unicode(") or
+     n.startsWith("changes(") or n.startsWith("total_changes(") or
+     n.startsWith("last_insert_rowid("):
     result = ckInteger
-  elif n.startsWith("percent_rank(") or n.startsWith("cume_dist("):
+  elif n.startsWith("percent_rank(") or n.startsWith("cume_dist(") or
+      n.startsWith("avg(") or n.startsWith("total(") or
+      n.startsWith("round(") or n.startsWith("julianday("):
     result = ckReal
-  elif n.startsWith("typeof(") or n.startsWith("quote("):
+  elif n.startsWith("typeof(") or n.startsWith("quote(") or
+      n.startsWith("upper(") or n.startsWith("lower(") or
+      n.startsWith("trim(") or n.startsWith("ltrim(") or
+      n.startsWith("rtrim(") or n.startsWith("substr(") or
+      n.startsWith("replace(") or n.startsWith("hex(") or
+      n.startsWith("strftime(") or n.startsWith("date(") or
+      n.startsWith("datetime(") or n.startsWith("time(") or
+      n.startsWith("soundex(") or n.startsWith("printf(") or
+      n.startsWith("format(") or n.startsWith("sqlite_version(") or
+      n.startsWith("sqlite_source_id(") or n.startsWith("char("):
     result = ckText
   elif n.startsWith("zeroblob(") or n.startsWith("randomblob("):
     result = ckBlob
