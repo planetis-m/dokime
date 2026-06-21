@@ -10,30 +10,31 @@ import std / [envvars, strutils]
 import cacheio, dynamicquery
 import ".." / sqlite3
 
-func isLiteral(s: string): bool =
+func isLiteralKind(s: string): ColumnKind =
   let t = s.strip
   if t.len == 0:
-    return false
-  if t.startsWith("'") and t.endsWith("'"):
-    return true
-  var i = 0
-  if t[i] == '-':
-    inc i
-  var dotSeen = false
-  var hasDigit = false
-  while i < t.len:
-    case t[i]
-    of '0'..'9':
-      hasDigit = true
+    result = ckNull
+  elif t.startsWith("'") and t.endsWith("'"):
+    result = ckText
+  else:
+    var i = 0
+    if t[i] == '-':
       inc i
-    of '.':
-      if dotSeen:
-        return false
-      dotSeen = true
-      inc i
-    else:
-      return false
-  result = hasDigit
+    var dotSeen = false
+    var hasDigit = false
+    while i < t.len:
+      case t[i]
+      of '0'..'9':
+        hasDigit = true
+        inc i
+      of '.':
+        if dotSeen:
+          return ckNull
+        dotSeen = true
+        inc i
+      else:
+        return ckNull
+    result = if hasDigit: ckInteger else: ckNull
 
 func isKnownNotNull(colName: string): bool =
   let n = colName.toLowerAscii
@@ -47,7 +48,7 @@ func isKnownNotNull(colName: string): bool =
     result = true
   elif n == "current_date" or n == "current_time" or n == "current_timestamp":
     result = true
-  elif isLiteral(colName):
+  elif isLiteralKind(colName) != ckNull:
     result = true
   else:
     result = false
@@ -74,13 +75,8 @@ func inferExprKind(colName: string): ColumnKind =
     result = ckBlob
   elif n == "current_date" or n == "current_time" or n == "current_timestamp":
     result = ckText
-  elif isLiteral(colName):
-    if colName.strip.startsWith("'"):
-      result = ckText
-    else:
-      result = ckInteger
   else:
-    result = ckNull
+    result = isLiteralKind(colName)
 
 proc inferNullable(db: sqlite3.DbConn; stmt: sqlite3.Stmt; col: int): bool =
   let tableName = sqlite3_column_table_name(stmt, col.cint)
@@ -113,7 +109,8 @@ proc validateSql*(sql: string): SqlMeta =
     let msg =
       if db != nil: fromCString(sqlite3_errmsg(db))
       else: "open failed"
-    return SqlMeta(error: "cannot open database: " & msg)
+    result = SqlMeta(error: "cannot open database: " & msg)
+    return
 
   var stmt: sqlite3.Stmt = nil
   var s = sql
@@ -121,7 +118,8 @@ proc validateSql*(sql: string): SqlMeta =
   if prepRc != SQLITE_OK:
     let errMsg = fromCString(sqlite3_errmsg(db))
     discard sqlite3_close_v2(db)
-    return SqlMeta(error: errMsg)
+    result = SqlMeta(error: errMsg)
+    return
 
   let params = sqlite3_bind_parameter_count(stmt).int
   let count = sqlite3_column_count(stmt)
