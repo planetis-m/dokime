@@ -35,13 +35,14 @@ const Negative = [
   "tbadexec.nim",
   "tbadcommand.nim",
   "tbademptysql.nim",
-  "tbadnonliteral.nim",
   "tbadnested.nim",
   "tbadunterminated.nim",
   "tbadunmatched.nim",
   "tbadnoparams.nim",
   "tbadmultipleparams.nim",
-  "tbadtoomany.nim"
+  "tbadtoomany.nim",
+  "tbadoptionalvariant.nim",
+  "tbadoptionalcolumns.nim"
 ]
 
 const OfflineOnly = [
