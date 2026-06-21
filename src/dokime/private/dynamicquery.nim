@@ -9,7 +9,7 @@ type
     text*: string
     isOptional*: bool
     clauseIndex*: int
-    paramIndexes*: seq[int]
+    paramIndex*: int
 
   ParsedSql* = object
     parts*: seq[SqlPart]
@@ -38,28 +38,29 @@ proc addPart(parsed: var ParsedSql; text: string; isOptional: bool;
     return
 
   let paramBase = parsed.params.len
-  var paramIndexes: seq[int] = @[]
+  var paramCount = 0
+  var paramIndex = 0
   var i = 0
   while i < text.len:
     if text[i] == '\'':
       i = text.skipStringLiteral(i)
     else:
       if text[i] == '?':
-        let paramIndex = paramBase + paramIndexes.len
-        paramIndexes.add paramIndex
+        paramIndex = paramBase + paramCount
+        inc paramCount
         parsed.params.add(if isOptional: clauseIndex else: -1)
       inc i
 
-  if isOptional and paramIndexes.len != 1:
+  if isOptional and paramCount != 1:
     parsed.error = "optional SQL blocks must contain exactly one ? parameter" &
-      " outside string literals; found " & $paramIndexes.len
+      " outside string literals; found " & $paramCount
     return
 
   parsed.parts.add SqlPart(
     text: text,
     isOptional: isOptional,
     clauseIndex: clauseIndex,
-    paramIndexes: paramIndexes)
+    paramIndex: paramIndex)
 
 func findOptionalClose(sql: string; start: int): (int, string) =
   var pos = start + 1

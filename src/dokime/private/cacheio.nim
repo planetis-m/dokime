@@ -8,7 +8,8 @@ const
   DefaultCacheRoot* = ".dokime"
 
 type
-  ColumnKind* = enum ckInteger, ckText, ckReal, ckBlob, ckNull
+  ColumnKind* = enum
+    ckInteger, ckText, ckReal, ckBlob, ckNull
 
   ColumnMeta* = object
     name*: string

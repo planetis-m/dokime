@@ -152,7 +152,7 @@ proc emitVariantMask(t: var NifBuilder; input: QueryInput) =
 
   for part in input.parsedSql.parts:
     if part.isOptional:
-      let paramIndex = part.paramIndexes[0]
+      let paramIndex = part.paramIndex
       t.withTree(IfS, NoLineInfo):
         t.withTree(ElifU, NoLineInfo):
           t.withTree(CallX, NoLineInfo):

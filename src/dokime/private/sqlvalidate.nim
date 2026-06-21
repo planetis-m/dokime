@@ -46,7 +46,9 @@ proc validateSql*(sql: string): SqlMeta =
   var db: sqlite3.DbConn = nil
   let rc = sqlite3_open_v2(toCString(dbPath), db, SQLITE_OPEN_READWRITE, nil)
   if rc != SQLITE_OK:
-    let msg = if db != nil: fromCString(sqlite3_errmsg(db)) else: "open failed"
+    let msg =
+      if db != nil: fromCString(sqlite3_errmsg(db))
+      else: "open failed"
     return SqlMeta(error: "cannot open database: " & msg)
 
   var stmt: sqlite3.Stmt = nil
