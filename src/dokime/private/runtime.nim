@@ -29,8 +29,6 @@ proc `=dup`*[T: tuple](rs: RowSet[T]): RowSet[T] {.error.}
 
 proc `=destroy`(db: DatabaseObj) =
   if db.conn != nil:
-    if db.txActive:
-      discard sqlite3_exec(db.conn, cstring("ROLLBACK"), nil, nil, nil)
     discard sqlite3_close_v2(db.conn)
 
 proc `=wasMoved`(db: var DatabaseObj) =
