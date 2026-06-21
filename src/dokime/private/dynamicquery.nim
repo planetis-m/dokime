@@ -1,6 +1,17 @@
 ## Parser and variant helpers for dokime optional SQL clauses.
+##
 
-import cacheio
+func skipStringLiteral(sql: string; start: int): int =
+  result = start + 1
+  while result < sql.len:
+    if sql[result] == '\'':
+      if result + 1 < sql.len and sql[result + 1] == '\'':
+        inc result, 2
+      else:
+        inc result
+        return
+    else:
+      inc result
 
 const MaxOptionalParts* = 8
 
