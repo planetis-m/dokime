@@ -37,17 +37,13 @@ func isLiteral(s: string): bool =
 
 func isKnownNotNull(colName: string): bool =
   let n = colName.toLowerAscii
-  if n.startsWith("count("):
-    result = true
-  elif n.startsWith("exists("):
-    result = true
-  elif n.startsWith("typeof(") or n.startsWith("quote(") or
-       n.startsWith("zeroblob(") or n.startsWith("randomblob(") or
-       n.startsWith("random("):
-    result = true
-  elif n.startsWith("row_number(") or n.startsWith("rank(") or
-       n.startsWith("dense_rank(") or n.startsWith("ntile(") or
-       n.startsWith("percent_rank(") or n.startsWith("cume_dist("):
+  if n.startsWith("count(") or n.startsWith("exists(") or
+     n.startsWith("typeof(") or n.startsWith("quote(") or
+     n.startsWith("zeroblob(") or n.startsWith("randomblob(") or
+     n.startsWith("random(") or n.startsWith("row_number(") or
+     n.startsWith("rank(") or n.startsWith("dense_rank(") or
+     n.startsWith("ntile(") or n.startsWith("percent_rank(") or
+     n.startsWith("cume_dist("):
     result = true
   elif n == "current_date" or n == "current_time" or n == "current_timestamp":
     result = true
@@ -64,12 +60,18 @@ proc toColumnKind(typeName: string; colName: string): ColumnKind =
   of "BLOB": result = ckBlob
   else:
     let n = colName.toLowerAscii
-    if n.startsWith("count(") or n.startsWith("exists(") or n.startsWith("random("):
+    if n.startsWith("count(") or n.startsWith("exists(") or n.startsWith("random(") or
+       n.startsWith("row_number(") or n.startsWith("rank(") or
+       n.startsWith("dense_rank(") or n.startsWith("ntile("):
       result = ckInteger
+    elif n.startsWith("percent_rank(") or n.startsWith("cume_dist("):
+      result = ckReal
     elif n.startsWith("typeof(") or n.startsWith("quote("):
       result = ckText
     elif n.startsWith("zeroblob(") or n.startsWith("randomblob("):
       result = ckBlob
+    elif n == "current_date" or n == "current_time" or n == "current_timestamp":
+      result = ckText
     elif isLiteral(colName):
       if colName.strip.startsWith("'"):
         result = ckText
