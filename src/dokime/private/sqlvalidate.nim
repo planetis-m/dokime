@@ -11,9 +11,10 @@ import cacheio, dynamicquery
 import ".." / sqlite3
 
 func isLiteralKind(s: string): ColumnKind =
+  result = ckNull
   let t = s.strip
   if t.len == 0:
-    result = ckNull
+    discard
   elif t.startsWith("'") and t.endsWith("'"):
     result = ckText
   else:
@@ -101,47 +102,43 @@ proc validateSql*(sql: string): SqlMeta =
   var dbPath = getEnv("DOKIME_DATABASE_PATH")
   if dbPath.len == 0:
     result = readCache(sql)
-    return
-
-  var db: sqlite3.DbConn = nil
-  let rc = sqlite3_open_v2(toCString(dbPath), db, SQLITE_OPEN_READWRITE, nil)
-  if rc != SQLITE_OK:
-    let msg =
-      if db != nil: fromCString(sqlite3_errmsg(db))
-      else: "open failed"
-    result = SqlMeta(error: "cannot open database: " & msg)
-    return
-
-  var stmt: sqlite3.Stmt = nil
-  var s = sql
-  let prepRc = sqlite3_prepare_v2(db, toCString(s), sql.len.cint, stmt, nil)
-  if prepRc != SQLITE_OK:
-    let errMsg = fromCString(sqlite3_errmsg(db))
-    discard sqlite3_close_v2(db)
-    result = SqlMeta(error: errMsg)
-    return
-
-  let params = sqlite3_bind_parameter_count(stmt).int
-  let count = sqlite3_column_count(stmt)
-  var columns: seq[ColumnMeta] = @[]
-  for i in 0..<count.int:
-    let colName = fromCString(sqlite3_column_name(stmt, i.cint))
-    let displayName =
-      if isValidIdent(colName): colName else: "col_" & $i
-    let decltype = sqlite3_column_decltype(stmt, i.cint)
-    let typeStr = if decltype != nil: fromCString(decltype) else: ""
-    var kind = toColumnKind(typeStr)
-    if kind == ckNull:
-      kind = inferExprKind(colName)
-    columns.add ColumnMeta(
-      name: displayName,
-      kind: kind,
-      nullable: inferNullable(db, stmt, i))
-  discard sqlite3_finalize(stmt)
-  discard sqlite3_close_v2(db)
-
-  writeCache(sql, columns, params)
-  result = SqlMeta(columns: columns, params: params)
+  else:
+    var db: sqlite3.DbConn = nil
+    let rc = sqlite3_open_v2(toCString(dbPath), db, SQLITE_OPEN_READWRITE, nil)
+    if rc != SQLITE_OK:
+      let msg =
+        if db != nil: fromCString(sqlite3_errmsg(db))
+        else: "open failed"
+      result = SqlMeta(error: "cannot open database: " & msg)
+    else:
+      var stmt: sqlite3.Stmt = nil
+      var s = sql
+      let prepRc = sqlite3_prepare_v2(db, toCString(s), sql.len.cint, stmt, nil)
+      if prepRc != SQLITE_OK:
+        let errMsg = fromCString(sqlite3_errmsg(db))
+        discard sqlite3_close_v2(db)
+        result = SqlMeta(error: errMsg)
+      else:
+        let params = sqlite3_bind_parameter_count(stmt).int
+        let count = sqlite3_column_count(stmt)
+        var columns: seq[ColumnMeta] = @[]
+        for i in 0..<count.int:
+          let colName = fromCString(sqlite3_column_name(stmt, i.cint))
+          let displayName =
+            if isValidIdent(colName): colName else: "col_" & $i
+          let decltype = sqlite3_column_decltype(stmt, i.cint)
+          let typeStr = if decltype != nil: fromCString(decltype) else: ""
+          var kind = toColumnKind(typeStr)
+          if kind == ckNull:
+            kind = inferExprKind(colName)
+          columns.add ColumnMeta(
+            name: displayName,
+            kind: kind,
+            nullable: inferNullable(db, stmt, i))
+        discard sqlite3_finalize(stmt)
+        discard sqlite3_close_v2(db)
+        writeCache(sql, columns, params)
+        result = SqlMeta(columns: columns, params: params)
 
 func sameColumns(a, b: seq[ColumnMeta]): bool =
   if a.len != b.len:
