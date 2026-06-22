@@ -209,8 +209,8 @@ module (`query`, `queryOpt`, `rows`, `exec`) once and caches the result. A pure
 Nimony build takes ~1.8s; with dokime the first build takes ~11s.
 
 **Subsequent warm builds take ~2.9s** — about 1.1s over baseline, regardless of
-how many query/exec calls your file contains. Plugin binaries are cached and
-reused across calls of the same type.
+how many query/exec calls your file contains. The plugin executable is shared
+across all invocations of the same type.
 
 - **Online vs offline: no difference.** Validating against a live database takes
   the same time as reading from `.dokime/queries/`. The cache is instant.
