@@ -8,10 +8,9 @@
 ## echo row.name   # string
 ## ```
 
-import std/opt
 import dokime/private/runtime
 
-export opt, runtime
+export runtime
 
 template query*(): untyped {.varargs, plugin: "dokime/private/plugins/queryone".}
   ## Compile-time validated SQL query that returns exactly one row.
