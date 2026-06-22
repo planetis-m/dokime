@@ -3,13 +3,10 @@
 import std/[assertions, syncio]
 import ".." / "src" / dokime
 
-proc missingQuery(db: Database) {.raises.} =
-  discard query(db, "SELECT id, name FROM users WHERE id = ?", 2'i64)
-
 proc checkMissingRaises(db: Database) {.raises.} =
   var raised = false
   try:
-    missingQuery(db)
+    discard query(db, "SELECT id, name FROM users WHERE id = ?", 2'i64)
   except ErrorCode as e:
     assert e == BadOperation, "expected BadOperation, got " & $e
     raised = true

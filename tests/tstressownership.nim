@@ -3,9 +3,6 @@
 import std/[assertions, syncio]
 import ".." / "src" / dokime
 
-proc missingUser(db: Database; id: int64) {.raises.} =
-  discard query(db, "SELECT id FROM users WHERE id = ?", id)
-
 proc dbSetup(): Database {.raises.} =
   result = connect("tests/tstressownership.db")
   discard exec(result, "DROP TABLE IF EXISTS users")
@@ -77,7 +74,7 @@ proc test_rollbackThenNewBegin(db: Database) {.raises.} =
     commit(tx)
   var missing = false
   try:
-    missingUser(db, 3'i64)
+    discard query(db, "SELECT id FROM users WHERE id = ?", 3'i64)
   except:
     missing = true
   assert(missing, "row 3 must have been rolled back")

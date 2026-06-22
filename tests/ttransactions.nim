@@ -3,13 +3,10 @@
 import std/[assertions, syncio]
 import ".." / "src" / dokime
 
-proc missingUser(db: Database; id: int64) {.raises.} =
-  discard query(db, "SELECT id FROM users WHERE id = ?", id)
-
 proc assertMissing(db: Database; id: int64) {.raises.} =
   var raised = false
   try:
-    missingUser(db, id)
+    discard query(db, "SELECT id FROM users WHERE id = ?", id)
   except ErrorCode as e:
     assert e == BadOperation
     raised = true
