@@ -214,8 +214,9 @@ reused across calls of the same type.
 
 - **Online vs offline: no difference.** Validating against a live database takes
   the same time as reading from `.dokime/queries/`. The cache is instant.
-- **More calls don't slow things down.** 16 queries cost the same as 2. The
-  plugin executable is shared across all invocations of the same type.
+- **More calls add negligible cost.** 50 `exec()` calls compile in ~3.1s vs
+  ~2.7s for a single call — about 8ms per additional query. Each plugin type
+  compiles to one shared binary; every call reuses the same executable.
 - **Dynamic optional clauses** with many variants add negligible cost — each
   variant is validated at plugin-execution time (milliseconds), not during
   Nimony compilation.
