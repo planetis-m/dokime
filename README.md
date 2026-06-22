@@ -201,6 +201,28 @@ ORDER BY id
 Each optional block contains exactly one `?`. Required parameters outside
 optional blocks continue to use plain values.
 
+## Performance
+
+Compile-time validation adds a one-time **cold-start cost of ~9 seconds** the
+first time you build a project that uses dokime. Nimony compiles each plugin
+module (`query`, `queryOpt`, `rows`, `exec`) once and caches the result. A pure
+Nimony build takes ~1.8s; with dokime the first build takes ~11s.
+
+**Subsequent warm builds take ~2.9s** — about 1.1s over baseline, regardless of
+how many query/exec calls your file contains. Plugin binaries are cached and
+reused across calls of the same type.
+
+- **Online vs offline: no difference.** Validating against a live database takes
+  the same time as reading from `.dokime/queries/`. The cache is instant.
+- **More calls don't slow things down.** 16 queries cost the same as 2. The
+  plugin executable is shared across all invocations of the same type.
+- **Dynamic optional clauses** with many variants add negligible cost — each
+  variant is validated at plugin-execution time (milliseconds), not during
+  Nimony compilation.
+- **Each new plugin type** (e.g., adding `queryOpt` to a project that only used
+  `query`) adds one cold compilation (~4s) the first time, then zero marginal
+  cost after caching.
+
 ## Nullable Columns
 
 Nullable result columns decode to `Opt[T]`:
