@@ -441,3 +441,17 @@ proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
           "dokime: " & $mode & " requires row-returning SQL; use exec for command SQL", inp.info)
     else:
       result = buildTree(query, meta.columns, mode, inp.info)
+
+proc transform(root: NifCursor): NifBuilder =
+  let mode =
+    case pluginName(root)
+    of "query", "queryOne": qmOne
+    of "queryOpt": qmOpt
+    of "rows": qmRows
+    of "exec": qmExec
+    else:
+      return errorTree("dokime: unsupported query plugin", root)
+  result = generate(callArgs(root), mode)
+
+let pluginInput = loadPluginInput()
+saveTree transform(pluginInput)
