@@ -12,7 +12,7 @@ import dokime/private/runtime
 
 export runtime
 
-template query*(): untyped {.varargs, plugin: "dokime/private/plugins/queryone".}
+template query*(): untyped {.varargs, plugin: "dokime/private/plugins/unified".}
   ## Compile-time validated SQL query that returns exactly one row.
   ##
   ## The SQL string is checked against your development database at compile time.
@@ -23,10 +23,10 @@ template query*(): untyped {.varargs, plugin: "dokime/private/plugins/queryone".
   ## echo row.id
   ## ```
 
-template queryOne*(): untyped {.varargs, plugin: "dokime/private/plugins/queryone".}
+template queryOne*(): untyped {.varargs, plugin: "dokime/private/plugins/unified".}
   ## Alias for `query`.
 
-template queryOpt*(): untyped {.varargs, plugin: "dokime/private/plugins/queryopt".}
+template queryOpt*(): untyped {.varargs, plugin: "dokime/private/plugins/unified".}
   ## Compile-time validated SQL query that may return zero rows.
   ##
   ## Returns `Opt[tuple[...]]`.  Use when the absence of a matching row is
@@ -38,7 +38,7 @@ template queryOpt*(): untyped {.varargs, plugin: "dokime/private/plugins/queryop
   ##   echo maybe.get.name
   ## ```
 
-template rows*(): untyped {.varargs, plugin: "dokime/private/plugins/rows".}
+template rows*(): untyped {.varargs, plugin: "dokime/private/plugins/unified".}
   ## Compile-time validated SQL query that returns all matching rows.
   ##
   ## Returns a value that can be iterated with `for`:
@@ -48,7 +48,7 @@ template rows*(): untyped {.varargs, plugin: "dokime/private/plugins/rows".}
   ##   echo row.id, " ", row.name
   ## ```
 
-template exec*(): untyped {.varargs, plugin: "dokime/private/plugins/exec".}
+template exec*(): untyped {.varargs, plugin: "dokime/private/plugins/unified".}
   ## Compile-time validated SQL command with no result columns.
   ##
   ## Use for INSERT, UPDATE, DELETE, DDL, BEGIN, COMMIT, and ROLLBACK.
