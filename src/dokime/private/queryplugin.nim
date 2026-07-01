@@ -25,29 +25,6 @@ type
     params: seq[NifCursor]
     error: string
 
-  QuerySymbols = object
-    stmt: SymId
-    params: seq[SymId]
-    variant: SymId
-    binds: seq[SymId]
-    row: SymId
-    result: SymId
-    step: SymId
-    finalize: SymId
-
-proc newQuerySymbols(paramCount, variantCount: int): QuerySymbols =
-  result = QuerySymbols(params: @[], binds: @[])
-  result.stmt = genSym()
-  for _ in 0 ..< paramCount:
-    result.params.add genSym()
-  result.variant = genSym()
-  for _ in 0 ..< variantCount:
-    result.binds.add genSym()
-  result.row = genSym()
-  result.result = genSym()
-  result.step = genSym()
-  result.finalize = genSym()
-
 proc addGeneratedDef(t: var NifBuilder; symbol: SymId) =
   t.addSymDef(symbol, NoLineInfo)
 
@@ -143,19 +120,19 @@ proc emitDecodedRow(t: var NifBuilder; columns: seq[ColumnMeta];
 
 # (let __dokime_param_I . . PARAM)*
 proc emitParamLocals(t: var NifBuilder; input: QueryInput;
-    symbols: QuerySymbols) =
+    params: seq[SymId]) =
   for i, paramCursor in input.params:
     t.withTree(LetS, NoLineInfo):
-      t.addGeneratedDef(symbols.params[i])
+      t.addGeneratedDef(params[i])
       t.addEmptyNode3()
       t.addSubtree(paramCursor)
 
 # (var __dokime_stmt . . (call prepareStmt DB SQL SQL_LEN))
 # (call bindParam __dokime_stmt (i+1) PARAM)*
 proc emitStaticPrepareAndBinds(t: var NifBuilder; input: QueryInput;
-    symbols: QuerySymbols) =
+    stmt: SymId) =
   t.withTree(VarS, NoLineInfo):
-    t.addGeneratedDef(symbols.stmt)
+    t.addGeneratedDef(stmt)
     t.addEmptyNode3()
     t.withTree(CallX, NoLineInfo):
       t.bindSym("prepareStmt")
@@ -166,7 +143,7 @@ proc emitStaticPrepareAndBinds(t: var NifBuilder; input: QueryInput;
   for i, paramCursor in input.params:
     t.withTree(CallX, NoLineInfo):
       t.bindSym("bindParam")
-      t.addGeneratedUse(symbols.stmt)
+      t.addGeneratedUse(stmt)
       t.addIntLit(i + 1)
       t.addSubtree(paramCursor)
 
@@ -174,9 +151,9 @@ proc emitStaticPrepareAndBinds(t: var NifBuilder; input: QueryInput;
 # (if (elif (call isSome __dokime_param_I)
 #          (stmts (asgn __dokime_variant (bitor int __dokime_variant BIT))))*
 proc emitVariantMask(t: var NifBuilder; input: QueryInput;
-    symbols: QuerySymbols) =
+    params: seq[SymId]; variant: SymId) =
   t.withTree(VarS, NoLineInfo):
-    t.addGeneratedDef(symbols.variant)
+    t.addGeneratedDef(variant)
     t.addEmptyNode3()
     t.addIntLit(0)
 
@@ -187,55 +164,56 @@ proc emitVariantMask(t: var NifBuilder; input: QueryInput;
         t.withTree(ElifU, NoLineInfo):
           t.withTree(CallX, NoLineInfo):
             t.bindSym("isSome")
-            t.addGeneratedUse(symbols.params[paramIndex])
+            t.addGeneratedUse(params[paramIndex])
           t.withTree(StmtsS, NoLineInfo):
             # (asgn __dokime_variant (bitor int __dokime_variant BIT))
             t.withTree(AsgnS, NoLineInfo):
-              t.addGeneratedUse(symbols.variant)
+              t.addGeneratedUse(variant)
               t.withTree(BitorX, NoLineInfo):
                 t.addIdent("int")
-                t.addGeneratedUse(symbols.variant)
+                t.addGeneratedUse(variant)
                 t.addIntLit(1 shl part.clauseIndex)
 
 # (call bindNextParam __dokime_stmt __dokime_bind
 #   (unsafeGet __dokime_param_I) | __dokime_param_I)
 proc emitBindForParam(t: var NifBuilder; paramIndex: int; clauseIndex: int;
-    bindSymId: SymId; symbols: QuerySymbols)
+    bindIndex, stmt: SymId; params: seq[SymId])
     {.ensuresNif: addedStmt(t).} =
   t.withTree(CallX, NoLineInfo):
     t.bindSym("bindNextParam")
-    t.addGeneratedUse(symbols.stmt)
-    t.addGeneratedUse(bindSymId)
+    t.addGeneratedUse(stmt)
+    t.addGeneratedUse(bindIndex)
     if clauseIndex < 0:
-      t.addGeneratedUse(symbols.params[paramIndex])
+      t.addGeneratedUse(params[paramIndex])
     else:
       t.withTree(CallX, NoLineInfo):
         t.bindSym("unsafeGet")
-        t.addGeneratedUse(symbols.params[paramIndex])
+        t.addGeneratedUse(params[paramIndex])
 
 # (stmts
 #   (asgn __dokime_stmt (call prepareStmt DB SQL SQL_LEN))
 #   (var __dokime_bind . . 1)
 #   (call bindNextParam __dokime_stmt __dokime_bind ARG)*)
 proc emitVariantBody(t: var NifBuilder; input: QueryInput; mask: int;
-    symbols: QuerySymbols) =
+    stmt: SymId; params: seq[SymId]) =
   let sql = input.parsedSql.renderVariant(mask)
   t.withTree(AsgnS, NoLineInfo):
-    t.addGeneratedUse(symbols.stmt)
+    t.addGeneratedUse(stmt)
     t.withTree(CallX, NoLineInfo):
       t.bindSym("prepareStmt")
       t.addSubtree(input.dbExpr)
       t.addStrLit(sql)
       t.addIntLit(sql.len)
 
+  let bindIndex = genSym()
   t.withTree(VarS, NoLineInfo):
-    t.addGeneratedDef(symbols.binds[mask])
+    t.addGeneratedDef(bindIndex)
     t.addEmptyNode3()
     t.addIntLit(1)
 
   for i, clauseIndex in input.parsedSql.params:
     if clauseIndex < 0 or mask.clauseActive(clauseIndex):
-      t.emitBindForParam(i, clauseIndex, symbols.binds[mask], symbols)
+      t.emitBindForParam(i, clauseIndex, bindIndex, stmt, params)
 
 # (let __dokime_param_I . . PARAM)*
 # (var __dokime_variant . . int 0)
@@ -244,13 +222,18 @@ proc emitVariantBody(t: var NifBuilder; input: QueryInput; mask: int;
 # (if (elif (eq int __dokime_variant MASK) VARIANT_BODY)*
 #     (else VARIANT_BODY))
 proc emitDynamicPrepareAndBinds(t: var NifBuilder; input: QueryInput;
-    symbols: QuerySymbols) =
-  t.emitParamLocals(input, symbols)
-  t.emitVariantMask(input, symbols)
+    stmt: SymId) =
+  var params: seq[SymId] = @[]
+  for _ in input.params:
+    params.add genSym()
+  t.emitParamLocals(input, params)
+
+  let variant = genSym()
+  t.emitVariantMask(input, params, variant)
 
   # (var __dokime_stmt . . (call emptyStmt))
   t.withTree(VarS, NoLineInfo):
-    t.addGeneratedDef(symbols.stmt)
+    t.addGeneratedDef(stmt)
     t.addEmptyNode3()
     t.withTree(CallX, NoLineInfo):
       t.bindSym("emptyStmt")
@@ -261,13 +244,13 @@ proc emitDynamicPrepareAndBinds(t: var NifBuilder; input: QueryInput;
         # (eq int __dokime_variant MASK)
         t.withTree(EqX, NoLineInfo):
           t.addIdent("int")
-          t.addGeneratedUse(symbols.variant)
+          t.addGeneratedUse(variant)
           t.addIntLit(mask)
         t.withTree(StmtsS, NoLineInfo):
-          t.emitVariantBody(input, mask, symbols)
+          t.emitVariantBody(input, mask, stmt, params)
     t.withTree(ElseU, NoLineInfo):
       t.withTree(StmtsS, NoLineInfo):
-        t.emitVariantBody(input, 0, symbols)
+        t.emitVariantBody(input, 0, stmt, params)
 
 # ---------------------------------------------------------------------------
 # Query runtime expansion
@@ -287,69 +270,75 @@ proc emitDynamicPrepareAndBinds(t: var NifBuilder; input: QueryInput;
 #   (call requireStepRow __dokime_step) __dokime_row          -- qmOne
 #   __dokime_result                                           -- qmOpt
 proc emitSingleOrOptRow(t: var NifBuilder; columns: seq[ColumnMeta];
-    mode: QueryMode; symbols: QuerySymbols) =
+    mode: QueryMode; stmt: SymId) =
+  let row = genSym()
   # (var __dokime_row . . DEFAULT_ROW)
   t.withTree(VarS, NoLineInfo):
-    t.addGeneratedDef(symbols.row)
+    t.addGeneratedDef(row)
     t.addEmptyNode3()
     t.emitDefaultRow(columns)
 
+  let queryResult =
+    if mode == qmOpt: genSym()
+    else: SymId(0)
   if mode == qmOpt:
     # (var __dokime_result . . (call none (at Opt ROW_TYPE)))
     t.withTree(VarS, NoLineInfo):
-      t.addGeneratedDef(symbols.result)
+      t.addGeneratedDef(queryResult)
       t.addEmptyNode3()
       t.withTree(CallX, NoLineInfo):
         t.withTree(AtX, NoLineInfo):
           t.bindSym("none")
           t.emitRowType(columns)
 
+  let step = genSym()
   # (var __dokime_step . . (call stepStmtCode __dokime_stmt))
   t.withTree(VarS, NoLineInfo):
-    t.addGeneratedDef(symbols.step)
+    t.addGeneratedDef(step)
     t.addEmptyNode3()
     t.withTree(CallX, NoLineInfo):
       t.bindSym("stepStmtCode")
-      t.addGeneratedUse(symbols.stmt)
+      t.addGeneratedUse(stmt)
 
   t.withTree(IfS, NoLineInfo):
     t.withTree(ElifU, NoLineInfo):
       t.withTree(CallX, NoLineInfo):
         t.bindSym("stepReturnedRow")
-        t.addGeneratedUse(symbols.step)
+        t.addGeneratedUse(step)
       t.withTree(StmtsS, NoLineInfo):
         t.withTree(AsgnS, NoLineInfo):
-          t.addGeneratedUse(symbols.row)
-          t.emitDecodedRow(columns, symbols.stmt)
+          t.addGeneratedUse(row)
+          t.emitDecodedRow(columns, stmt)
         if mode == qmOpt:
           t.withTree(AsgnS, NoLineInfo):
-            t.addGeneratedUse(symbols.result)
+            t.addGeneratedUse(queryResult)
             t.withTree(CallX, NoLineInfo):
               t.bindSym("some")
-              t.addGeneratedUse(symbols.row)
+              t.addGeneratedUse(row)
 
+  let finalize = genSym()
   # (var __dokime_finalize . . (call finalizeStmtCode __dokime_stmt))
   t.withTree(VarS, NoLineInfo):
-    t.addGeneratedDef(symbols.finalize)
+    t.addGeneratedDef(finalize)
     t.addEmptyNode3()
     t.withTree(CallX, NoLineInfo):
       t.bindSym("finalizeStmtCode")
-      t.addGeneratedUse(symbols.stmt)
+      t.addGeneratedUse(stmt)
 
   t.withTree(CallX, NoLineInfo):
     t.bindSym("checkStepCode")
-    t.addGeneratedUse(symbols.step)
+    t.addGeneratedUse(step)
   t.withTree(CallX, NoLineInfo):
     t.bindSym("checkFinalizeCode")
-    t.addGeneratedUse(symbols.finalize)
+    t.addGeneratedUse(finalize)
 
   if mode == qmOne:
     t.withTree(CallX, NoLineInfo):
       t.bindSym("requireStepRow")
-      t.addGeneratedUse(symbols.step)
-    t.addGeneratedUse(symbols.row)
+      t.addGeneratedUse(step)
+    t.addGeneratedUse(row)
   else:
-    t.addGeneratedUse(symbols.result)
+    t.addGeneratedUse(queryResult)
 
 # Walks the `(db, "SQL", params...)` argument list and produces a QueryInput.
 # Sets `.error` on failure.
@@ -402,29 +391,29 @@ proc validateQuery(query: QueryInput): SqlMeta =
 #   ...or (call execStmt DB __dokime_stmt))                  -- qmExec
 proc buildTree(query: QueryInput; columns: seq[ColumnMeta];
     mode: QueryMode; info: LineInfo): NifBuilder =
-  let symbols = newQuerySymbols(query.params.len, query.parsedSql.variantCount)
+  let stmt = genSym()
   result = createTree()
   result.withTree(BlockS, info):
     result.addEmptyNode()
     result.withTree(StmtsS, info):
       if query.parsedSql.hasDynamicParts:
-        result.emitDynamicPrepareAndBinds(query, symbols)
+        result.emitDynamicPrepareAndBinds(query, stmt)
       else:
-        result.emitStaticPrepareAndBinds(query, symbols)
+        result.emitStaticPrepareAndBinds(query, stmt)
       case mode
       of qmRows:
         # (call initRows __dokime_stmt DEFAULT_ROW)
         result.withTree(CallX, NoLineInfo):
           result.bindSym("initRows")
-          result.addGeneratedUse(symbols.stmt)
+          result.addGeneratedUse(stmt)
           result.emitDefaultRow(columns)
       of qmOne, qmOpt:
-        result.emitSingleOrOptRow(columns, mode, symbols)
+        result.emitSingleOrOptRow(columns, mode, stmt)
       of qmExec:
         result.withTree(CallX, NoLineInfo):
           result.bindSym("execStmt")
           result.addSubtree(query.dbExpr)
-          result.addGeneratedUse(symbols.stmt)
+          result.addGeneratedUse(stmt)
 
 proc generate*(inp: NifCursor; mode: QueryMode): NifBuilder =
   let query = parseQueryInput(inp, mode)
